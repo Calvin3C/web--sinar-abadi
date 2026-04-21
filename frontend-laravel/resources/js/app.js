@@ -15,7 +15,7 @@ function addToCart(button) {
         name: button.dataset.name,
         price: parseInt(button.dataset.price),
         img: button.dataset.img || '',
-        isLarge: button.dataset.islarge === '1',
+        isLarge: button.dataset.islarge || '0',
         stock: parseInt(button.dataset.stock) || 0,
     };
 
@@ -40,9 +40,11 @@ function addToCart(button) {
     })
     .then(result => {
         if (result && result.success) {
-            // Update cart badge
-            const badge = document.getElementById('cart-counter');
-            if (badge) badge.textContent = result.cartCount;
+            // Update ALL cart badges on the page
+            document.querySelectorAll('#cart-counter').forEach(badge => {
+                badge.textContent = result.cartCount;
+                badge.style.display = result.cartCount > 0 ? 'flex' : 'none';
+            });
 
             showToast('success', 'Ditambahkan!', `${data.name} berhasil ditambahkan ke keranjang.`);
         } else {
@@ -89,3 +91,8 @@ function showToast(type, title, message) {
         setTimeout(() => toast.remove(), 500);
     }, 4000);
 }
+
+// ⚠️ PENTING: Expose ke global scope agar onclick="addToCart(this)" di HTML bisa bekerja
+// Vite/ESModule membungkus JS sehingga fungsi tidak otomatis global
+window.addToCart = addToCart;
+window.showToast = showToast;

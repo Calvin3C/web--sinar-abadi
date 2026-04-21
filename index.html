@@ -1,4 +1,4 @@
-﻿
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -7,7 +7,7 @@
         name="viewport" 
         content="width=device-width, initial-scale=1.0"
     >
-    <title>Sinar Abadi â€” Material Bangunan Modern</title>
+    <title>Sinar Abadi — Material Bangunan Modern</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -593,7 +593,7 @@
                 <div class="mt-8">
                     <div class="d-flex align-center justify-between mb-8">
                         <h3 class="section-title" style="margin-bottom:0;">Produk Paling Laku</h3>
-                        <button class="btn btn-ghost" onclick="app.navigate('katalog-full')">Lihat Semua â†’</button>
+                        <button class="btn btn-ghost" onclick="app.navigate('katalog-full')">Lihat Semua →</button>
                     </div>
                     <div class="product-grid" id="best-seller-grid"></div>
                 </div>
@@ -649,7 +649,7 @@
                         
                         <div class="form-group mb-8">
                             <label class="form-label">Kata Sandi</label>
-                            <input type="password" class="form-input" id="auth-password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢">
+                            <input type="password" class="form-input" id="auth-password" placeholder="••••••••">
                         </div>
 
                         <div class="dummy-data-box">
@@ -682,8 +682,8 @@
                             <ul class="sidebar-menu">
                                 <li class="active" onclick="app.switchDashTab('cust-tab-active', this)">Pesanan & Pengiriman <span class="badge" id="cust-active-count">0</span></li>
                                 <li onclick="app.switchDashTab('cust-tab-history', this)">Riwayat Selesai</li>
-                                <li onclick="app.switchDashTab('cust-tab-tracking', this)">ðŸ” Lacak Pesanan</li>
-                                <li onclick="app.toggleCart()">ðŸ›’ Keranjang Belanja <span class="badge" id="cust-cart-count">0</span></li>
+                                <li onclick="app.switchDashTab('cust-tab-tracking', this)">🔍 Lacak Pesanan</li>
+                                <li onclick="app.toggleCart()">🛒 Keranjang Belanja <span class="badge" id="cust-cart-count">0</span></li>
                             </ul>
                         </div>
                     </aside>
@@ -709,7 +709,7 @@
 
                         <div id="cust-tab-tracking" class="dash-tab" style="display:none;">
                             <div class="table-card">
-                                <div class="table-header"><h3>ðŸ” Lacak Pesanan Real-Time</h3></div>
+                                <div class="table-header"><h3>🔍 Lacak Pesanan Real-Time</h3></div>
                                 <div style="padding: 32px;">
                                     <p class="text-muted mb-6" style="font-size:14px;">Masukkan nomor referensi pesanan Anda untuk melacak status pengiriman secara langsung.</p>
                                     <div class="tracking-search-wrap" style="margin-bottom:24px;">
@@ -908,65 +908,68 @@
     </footer>
 
     <script>
-        const API_BASE = 'http://localhost:8080/api';
-
         const app = {
             // --- STATE MANAGEMENT ---
             state: {
                 isLoggedIn: false, currentUser: null, currentRole: 'guest', activeSection: 'home',
-                token: localStorage.getItem('sa_token') || null,
                 cart: [],
-                products: [], // local cache from API
                 catalogConfig: { page: 1, perPage: 12, query: '', category: 'all', sort: 'rekomendasi' },
                 checkoutForm: { city: '', method: '', phone: '', address: '' }
             },
 
-            // --- API HELPER ---
-            api: {
-                request: async (endpoint, method = 'GET', body = null) => {
-                    const headers = { 'Content-Type': 'application/json' };
-                    if (app.state.token) headers['Authorization'] = 'Bearer ' + app.state.token;
-                    const opts = { method, headers };
-                    if (body) opts.body = JSON.stringify(body);
-                    try {
-                        const res = await fetch(API_BASE + endpoint, opts);
-                        const data = await res.json();
-                        if (!res.ok) throw { status: res.status, message: data.error || 'Request failed' };
-                        return data;
-                    } catch (err) {
-                        if (err.message && !err.status) { throw { status: 0, message: 'Server tidak dapat dijangkau. Pastikan backend berjalan.' }; }
-                        throw err;
-                    }
-                },
-                get: (ep) => app.api.request(ep),
-                post: (ep, body) => app.api.request(ep, 'POST', body),
-                put: (ep, body) => app.api.request(ep, 'PUT', body),
-                del: (ep) => app.api.request(ep, 'DELETE'),
-            },
-
-            // --- STATIC DATA (UI only) ---
+            // --- DATABASE SYSTEM (WITH LOGISTICS FLAG "isLarge") ---
             db: {
+                users: [
+                    { username: 'budi', password: '123', role: 'customer', name: 'Budi Santoso', isBlocked: false },
+                    { username: 'admin', password: 'admin123', role: 'admin', name: 'Admin Operasional', isBlocked: false },
+                    { username: 'owner', password: 'owner123', role: 'owner', name: 'Dewan Direksi', isBlocked: false }
+                ],
                 categories: [
-                    { id: 'cat-semen', name: 'Semen', icon: '<use href="#cat-semen"></use>' },
-                    { id: 'cat-plumbing', name: 'Plumbing', icon: '<use href="#cat-plumbing"></use>' },
-                    { id: 'cat-paint', name: 'Cat Tembok', icon: '<use href="#cat-paint"></use>' },
-                    { id: 'cat-kayu', name: 'Cat Kayu', icon: '<use href="#cat-paint"></use>' },
-                    { id: 'cat-besi', name: 'Besi Beton', icon: '<use href="#cat-hardware"></use>' },
-                    { id: 'cat-kloset', name: 'Kloset', icon: '<use href="#cat-house"></use>' },
-                    { id: 'cat-tools', name: 'Tools', icon: '<use href="#cat-tools"></use>' },
+                    { id: 'cat-semen', name: 'Semen & Pasir', icon: '<use href="#cat-semen"></use>' },
+                    { id: 'cat-hardware', name: 'Builder Hardware', icon: '<use href="#cat-hardware"></use>' },
                     { id: 'cat-electric', name: 'Electrical', icon: '<use href="#cat-electric"></use>' },
-                    { id: 'cat-kuas', name: 'Kuas Cat', icon: '<use href="#cat-paint"></use>' },
-                    { id: 'cat-kunci', name: 'Kunci Pintu', icon: '<use href="#cat-hardware"></use>' },
-                    { id: 'cat-engsel', name: 'Engsel', icon: '<use href="#cat-hardware"></use>' },
-                    { id: 'cat-floor', name: 'Keramik & Granite', icon: '<use href="#cat-floor"></use>' }
+                    { id: 'cat-house', name: 'Houseware', icon: '<use href="#cat-house"></use>' },
+                    { id: 'cat-paint', name: 'Paint', icon: '<use href="#cat-paint"></use>' },
+                    { id: 'cat-plumbing', name: 'Plumbing Sanitary', icon: '<use href="#cat-plumbing"></use>' },
+                    { id: 'cat-floor', name: 'Flooring', icon: '<use href="#cat-floor"></use>' },
+                    { id: 'cat-tools', name: 'Tools & Machinery', icon: '<use href="#cat-tools"></use>' }
+                ],
+                products: [
+                    // Kategori Semen (BARANG BESAR)
+                    { id: 'P-001', category: 'Semen & Pasir', name: 'Semen Tiga Roda 50kg', price: 65000, sold: 1250, stock: 145, isLarge: true, img: 'https://www.tokotigaroda.com/images-data/product/3/pcc-bag-40kg.jpg' },
+                    { id: 'P-002', category: 'Semen & Pasir', name: 'Semen Gresik 40kg', price: 54000, sold: 890, stock: 110, isLarge: true, img: 'https://niagasinarsentosa.co.id/wp-content/uploads/2021/02/v1IdGK7K-semen-gresik-50kg.jpg' },
+                
+                    // Hardware (BARANG KECIL)
+                    { id: 'P-007', category: 'Builder Hardware', name: 'Kunci Pintu Dekkson LHTR 01', price: 185000, sold: 450, stock: 120, isLarge: false, img: 'https://nickonusa.co.id/cdn/shop/files/HRE0061_s1.jpg?v=1763009372' },
+                    
+                    // Electrical (BARANG KECIL)
+                    { id: 'P-011', category: 'Electrical', name: 'Lampu LED Philips 12W Putih', price: 42500, sold: 3050, stock: 500, isLarge: false, img: 'https://down-id.img.susercontent.com/file/id-11134207-7r98s-lqzzkwhs6bq191' },
+                    { id: 'P-013', category: 'Electrical', name: 'Stop Kontak Broco 4 Lubang', price: 55000, sold: 1500, stock: 350, isLarge: false, img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSlHdjVh3fOAKaYpvMO3GXcSAFkIFSndNoXBg&s' },
+                    // Plumbing (BARANG KECIL & BESAR)
+                    { id: 'P-015', category: 'Plumbing Sanitary', name: 'Pipa PVC Rucika AW 1/2" (4m)', price: 32000, sold: 4500, stock: 800, isLarge: true, img: 'https://down-id.img.susercontent.com/file/sg-11134201-23020-lz3zfbg5n3nv0c' },
+                    { id: 'P-016', category: 'Plumbing Sanitary', name: 'Keni L PVC Rucika 1/2"', price: 5000, sold: 5000, stock: 1500, isLarge: false, img: 'https://p16-images-sign-sg.tokopedia-static.net/tos-alisg-i-aphluv4xwc-sg/img/product-1/2020/6/3/866353462/866353462_32c39613-c0d9-40f2-9bc2-7402e5174523_1736_1736.jpg~tplv-aphluv4xwc-resize-jpeg:700:0.jpeg?lk3s=0ccea506&x-expires=1776103169&x-signature=8Q3AgNl6bkKRlcT8v%2F3nx%2BCh73g%3D&x-signature-webp=jGOpTe6%2FuGi1u5M76C%2F6NDj61jo%3D' },
+                    { id: 'P-017', category: 'Plumbing Sanitary', name: 'Kran Air Tembok Onda A 810', price: 42000, sold: 3100, stock: 650, isLarge: false, img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSqx8BA9eCCVktr_ZMESXFmNKQkv9t4ubVUgw&s' },
+                    
+                    // Paint (BARANG KECIL)
+                    { id: 'P-020', category: 'Paint', name: 'Cat Tembok Decolith 5Kg Putih', price: 115000, sold: 2150, stock: 400, isLarge: false, img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS6Fgo28KpziP85DnRNDDrmTCbaxyWmazNA1A&s' },
+                    { id: 'P-021', category: 'Paint', name: 'Aqua Proof 061 Abu-abu 20KG', price: 1293400, sold: 180, stock: 25, isLarge: true, img: 'https://www.depobangunan.co.id/media/catalog/product/cache/71f305564ac6e04ecc05726940a4946c/a/q/aqua_20lt.png' },
+                    { id: 'P-022', category: 'Paint', name: 'Kuas Cat Eterna 3 Inch', price: 15500, sold: 5200, stock: 1200, isLarge: false, img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSOot6MNkFxmoKyy7B2XhqkC_8mn9hDxxUDlQ&s' },
+                    
+                    // Flooring (BARANG BESAR)
+                    { id: 'P-023', category: 'Flooring', name: 'Granit Indogress 60x60 White', price: 185000, sold: 850, stock: 210, isLarge: true, img: 'https://images.tokopedia.net/img/cache/700/VqbcmM/2023/10/12/e8452a15-1945-4c9f-8a6d-34c3bf405210.jpg.webp' },
+            ],
+                    orders: [
+                    { id: 'ORD-260401-081', date: '2026-04-01', customer: 'budi', phone: '081234567890', address: 'Jl. Merdeka, Malang', shippingMethod: 'Kurir Toko Sinar Abadi', items: [{name: 'Kabel Eterna NYM 2x1.5mm', qty: 2, price: 385000}], total: 854700, status: 'success', proofUploaded: true, shippingStatus: 'Selesai' },
+                    { id: 'ORD-260402-309', date: '2026-04-02', customer: 'budi', phone: '081234567890', address: 'Toko Sinar Abadi', shippingMethod: 'Ambil di Toko', items: [{name: 'Semen Tiga Roda 50kg', qty: 10, price: 65000}], total: 721500, status: 'pending', proofUploaded: true, shippingStatus: 'Menunggu Konfirmasi' }
                 ]
             },
 
             // --- UTILITIES ---
             utils: {
                 formatRp: (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka),
+                genId: () => `ORD-${String(new Date().getFullYear()).slice(-2)}${String(new Date().getMonth()+1).padStart(2,'0')}${String(new Date().getDate()).padStart(2,'0')}-${Math.floor(Math.random()*900+100)}`,
                 generateWALink: (orderId, phone, isCustomer = true) => {
-                    let num = (phone || '').replace(/^0/, '62').replace(/\D/g,'');
+                    let num = phone.replace(/^0/, '62').replace(/\D/g,'');
                     if(isCustomer) {
                         return `https://wa.me/${num}?text=Halo,%20kami%20dari%20Sinar%20Abadi%20ingin%20mengonfirmasi%20pesanan%20Anda%20dengan%20nomor%20${orderId}.`;
                     } else {
@@ -987,26 +990,8 @@
             },
 
             // --- SYSTEM CORE ---
-            init: async () => {
-                app.buildSelectFilters();
-                app.catalog.renderCategories();
-
-                // Restore session from localStorage
-                const savedToken = localStorage.getItem('sa_token');
-                const savedUser = localStorage.getItem('sa_user');
-                if (savedToken && savedUser) {
-                    try {
-                        app.state.token = savedToken;
-                        app.state.currentUser = JSON.parse(savedUser);
-                        app.state.currentRole = app.state.currentUser.role;
-                        app.state.isLoggedIn = true;
-                    } catch(e) { app.auth.logout(); }
-                }
-
-                // Load products from API
-                await app.catalog.loadProducts();
-                app.catalog.renderBestSellingProducts();
-                app.updateNavigation();
+            init: () => {
+                app.buildSelectFilters(); app.catalog.renderCategories(); app.catalog.renderBestSellingProducts(); app.updateNavigation();
                 if (window.location.hash) app.navigate(window.location.hash.replace('#', ''));
             },
 
@@ -1035,59 +1020,28 @@
                 else { document.getElementById('nav-logout').style.display = 'block'; document.getElementById(`nav-${app.state.currentRole}`).style.display = 'block'; if (app.state.currentRole === 'customer') document.getElementById('nav-cart-btn').style.display = 'flex'; }
             },
 
-            // --- AUTH (via API) ---
             auth: {
                 isRegisterMode: false, currentTab: 'customer',
                 switchTab: (role, el) => { if (app.auth.isRegisterMode && role !== 'customer') return app.toast.show('Info', 'Hanya Pelanggan.', 'primary'); app.auth.currentTab = role; document.querySelectorAll('.role-tab').forEach(e => e.classList.remove('active')); el.classList.add('active'); document.getElementById('lbl-btn-role').innerText = role.charAt(0).toUpperCase() + role.slice(1); },
                 toggleMode: () => { app.auth.isRegisterMode = !app.auth.isRegisterMode; document.getElementById('auth-title').innerText = app.auth.isRegisterMode ? "Pendaftaran Baru" : "Autentikasi Sistem"; document.getElementById('auth-role-selector').style.display = app.auth.isRegisterMode ? 'none' : 'flex'; app.auth.currentTab = 'customer'; document.getElementById('lbl-btn-role').innerText = "Customer"; document.getElementById('auth-helper').innerHTML = app.auth.isRegisterMode ? `<a href="javascript:void(0)" onclick="app.auth.toggleMode()">Masuk di sini</a>` : `<a href="javascript:void(0)" onclick="app.auth.toggleMode()">Buat Rekening Customer</a>`; },
-                execute: async () => {
+                execute: () => {
                     const user = document.getElementById('auth-username').value, pass = document.getElementById('auth-password').value;
                     if (!user || !pass) return app.toast.show('Gagal', 'Lengkapi formulir.', 'danger');
-
-                    try {
-                        if (app.auth.isRegisterMode) {
-                            await app.api.post('/register', { username: user, password: pass, name: user });
-                            app.toast.show('Sukses', 'Akun terdaftar.', 'success');
-                            app.auth.toggleMode();
-                            return;
-                        }
-
-                        const data = await app.api.post('/login', { username: user, password: pass, role: app.auth.currentTab });
-                        
-                        // Save token and user
-                        app.state.token = data.token;
-                        app.state.currentUser = data.user;
-                        app.state.currentRole = data.user.role;
-                        app.state.isLoggedIn = true;
-                        localStorage.setItem('sa_token', data.token);
-                        localStorage.setItem('sa_user', JSON.stringify(data.user));
-
-                        app.updateNavigation();
-                        app.navigate(data.user.role);
-                        app.toast.show('Sukses', `Halo, ${data.user.name}.`, 'success');
-                        document.getElementById('auth-password').value = '';
-                    } catch (err) {
-                        app.toast.show('Ditolak', err.message || 'Kredensial tidak valid.', 'danger');
-                    }
+                    if (app.auth.isRegisterMode) { app.db.users.push({ username: user, password: pass, role: 'customer', name: user, isBlocked: false }); app.toast.show('Sukses', 'Akun terdaftar.', 'success'); app.auth.toggleMode(); return; }
+                    
+                    const validUser = app.db.users.find(u => u.username === user && u.password === pass && u.role === app.auth.currentTab);
+                    if (validUser) {
+                        if (validUser.isBlocked) return app.toast.show('Ditolak', 'Akun Anda telah diblokir oleh Admin.', 'danger');
+                        app.state.isLoggedIn = true; app.state.currentRole = validUser.role; app.state.currentUser = validUser;
+                        app.updateNavigation(); app.navigate(validUser.role); app.toast.show('Sukses', `Halo, ${validUser.name}.`, 'success'); document.getElementById('auth-password').value = '';
+                    } else { app.toast.show('Ditolak', 'Kredensial tidak valid.', 'danger'); }
                 },
-                logout: () => {
-                    app.state.isLoggedIn = false; app.state.currentRole = 'guest'; app.state.currentUser = null; app.state.token = null;
-                    localStorage.removeItem('sa_token'); localStorage.removeItem('sa_user');
-                    app.cart.clear(); app.updateNavigation(); app.navigate('home'); app.toast.show('Logout', 'Sesi diakhiri.', 'primary');
-                }
+                logout: () => { app.state.isLoggedIn = false; app.state.currentRole = 'guest'; app.state.currentUser = null; app.cart.clear(); app.updateNavigation(); app.navigate('home'); app.toast.show('Logout', 'Sesi diakhiri.', 'primary'); }
             },
 
-            // --- CATALOG (from API) ---
+            // --- CATALOG & LOGISTICS VISUALS ---
             buildSelectFilters: () => { const sel = document.getElementById('filter-cat'); app.db.categories.forEach(c => { sel.innerHTML += `<option value="${c.name}">${c.name}</option>`; }); },
             catalog: {
-                loadProducts: async () => {
-                    try {
-                        app.state.products = await app.api.get('/products');
-                    } catch(e) {
-                        console.error('Failed to load products:', e);
-                        app.state.products = [];
-                    }
-                },
                 renderCategories: () => { 
                     document.getElementById('category-container').innerHTML = app.db.categories.map(cat => 
                         `<div class="category-card" onclick="app.navigate('katalog-full'); document.getElementById('filter-cat').value='${cat.name}'; app.catalog.filterAll();">
@@ -1096,10 +1050,10 @@
                         </div>`
                     ).join(''); 
                 },
-                renderBestSellingProducts: () => { document.getElementById('best-seller-grid').innerHTML = app.catalog.buildCardsHTML([...app.state.products].sort((a, b) => b.sold - a.sold).slice(0, 8)); },
+                renderBestSellingProducts: () => { document.getElementById('best-seller-grid').innerHTML = app.catalog.buildCardsHTML([...app.db.products].sort((a, b) => b.sold - a.sold).slice(0, 8)); },
                 filterAll: (page = 1) => {
                     const cfg = app.state.catalogConfig; cfg.query = document.getElementById('search-input').value.toLowerCase(); cfg.category = document.getElementById('filter-cat').value; cfg.sort = document.getElementById('sort-select').value; cfg.page = page;
-                    let data = [...app.state.products];
+                    let data = [...app.db.products];
                     if (cfg.category !== 'all') data = data.filter(p => p.category === cfg.category);
                     if (cfg.query) data = data.filter(p => p.name.toLowerCase().includes(cfg.query));
                     
@@ -1115,12 +1069,11 @@
                 }).join('')
             },
 
-            // --- CART & CHECKOUT (calls API on submit) ---
+            // --- CART & LOGISTICS CHECKOUT ---
             cart: {
                 add: (pId) => {
                     if (!app.state.isLoggedIn || app.state.currentRole !== 'customer') { app.toast.show('Ditolak', 'Silakan login sebagai Customer untuk berbelanja.', 'danger'); if(!app.state.isLoggedIn) app.navigate('login'); return; }
-                    const prod = app.state.products.find(p => p.id === pId);
-                    if(!prod) return;
+                    const prod = app.db.products.find(p => p.id === pId);
                     if(prod.stock <= 0) return app.toast.show('Habis', 'Stok produk ini sedang kosong.', 'warning');
                     
                     const exist = app.state.cart.find(i => i.product.id === pId);
@@ -1152,6 +1105,8 @@
                 
                 openCheckoutModal: () => {
                     if (!app.state.isLoggedIn) { app.toggleCart(); app.toast.show('Perhatian', 'Harap login terlebih dahulu.', 'warning'); app.navigate('login'); return; }
+                    
+                    // Reset Form
                     document.getElementById('checkout-phone').value = '';
                     document.getElementById('checkout-city').value = '';
                     document.getElementById('checkout-fname').value = '';
@@ -1162,10 +1117,12 @@
                     document.getElementById('checkout-city-detail').value = '';
                     document.getElementById('checkout-district').value = '';
                     document.getElementById('checkout-postal').value = '';
+                    
                     document.getElementById('logistics-warning').style.display = 'none';
                     document.getElementById('address-group').style.display = 'none';
                     document.querySelectorAll('.radio-card').forEach(c => { c.classList.remove('selected', 'disabled'); c.querySelector('input').checked = false; c.style.display = 'flex'; });
                     document.getElementById('btn-process-checkout').disabled = true;
+                    
                     document.getElementById('cart-drawer').classList.remove('active');
                     document.getElementById('modal-checkout').classList.add('active');
                     document.getElementById('global-overlay').classList.add('active');
@@ -1175,16 +1132,27 @@
                     const city = document.getElementById('checkout-city').value;
                     const hasLargeItem = app.state.cart.some(i => i.product.isLarge);
                     const warnBox = document.getElementById('logistics-warning');
+                    
+                    // Reset Radio State
                     app.state.checkoutForm.method = '';
                     document.querySelectorAll('.radio-card').forEach(c => { c.classList.remove('selected', 'disabled'); c.querySelector('input').checked = false; c.style.display = 'flex'; });
+                    
                     if (city === 'malang') {
                         warnBox.style.display = 'none';
                         document.getElementById('method-jne').style.display = 'none';
                         document.getElementById('method-kurir').style.display = 'flex';
                     } else if (city === 'luar_kota') {
                         document.getElementById('method-kurir').style.display = 'none';
-                        if(hasLargeItem) { warnBox.style.display = 'flex'; document.getElementById('method-jne').classList.add('disabled'); document.getElementById('method-jne').querySelector('input').disabled = true; }
-                        else { warnBox.style.display = 'none'; document.getElementById('method-jne').classList.remove('disabled'); document.getElementById('method-jne').querySelector('input').disabled = false; }
+                        
+                        if(hasLargeItem) {
+                            warnBox.style.display = 'flex';
+                            document.getElementById('method-jne').classList.add('disabled');
+                            document.getElementById('method-jne').querySelector('input').disabled = true;
+                        } else {
+                            warnBox.style.display = 'none';
+                            document.getElementById('method-jne').classList.remove('disabled');
+                            document.getElementById('method-jne').querySelector('input').disabled = false;
+                        }
                     }
                     app.cart.checkFormValidity();
                 },
@@ -1194,8 +1162,14 @@
                     document.querySelectorAll('.radio-card').forEach(c => c.classList.remove('selected'));
                     radioInput.closest('.radio-card').classList.add('selected');
                     app.state.checkoutForm.method = radioInput.value;
+                    
                     const addrGroup = document.getElementById('address-group');
-                    if(radioInput.value === 'Ambil di Toko') { addrGroup.style.display = 'none'; } else { addrGroup.style.display = 'block'; }
+                    if(radioInput.value === 'Ambil di Toko') { 
+                        addrGroup.style.display = 'none'; 
+                    } else { 
+                        addrGroup.style.display = 'block'; 
+                    }
+                    
                     app.cart.checkFormValidity();
                 },
 
@@ -1203,6 +1177,7 @@
                     const city = document.getElementById('checkout-city').value;
                     const method = app.state.checkoutForm.method;
                     const phone = document.getElementById('checkout-phone').value;
+                    
                     let addressValid = true;
                     if (method !== 'Ambil di Toko') {
                         const fname = document.getElementById('checkout-fname').value;
@@ -1212,15 +1187,24 @@
                         const cityDet = document.getElementById('checkout-city-detail').value;
                         const dist = document.getElementById('checkout-district').value;
                         const postal = document.getElementById('checkout-postal').value;
-                        if (!fname || !lname || !addr || !prov || !cityDet || !dist || !postal) addressValid = false;
+
+                        if (!fname || !lname || !addr || !prov || !cityDet || !dist || !postal) {
+                            addressValid = false;
+                        }
                     }
-                    document.getElementById('btn-process-checkout').disabled = !(city && method && phone.length >= 10 && addressValid);
+
+                    if(city && method && phone.length >= 10 && addressValid) { 
+                        document.getElementById('btn-process-checkout').disabled = false; 
+                    } else { 
+                        document.getElementById('btn-process-checkout').disabled = true; 
+                    }
                 },
 
-                processCheckout: async () => {
+                processCheckout: () => {
                     const phone = document.getElementById('checkout-phone').value;
                     const method = app.state.checkoutForm.method;
                     let fullAddress = "Ambil di Toko Sinar Abadi";
+                    
                     if (method !== 'Ambil di Toko') {
                         const fname = document.getElementById('checkout-fname').value;
                         const lname = document.getElementById('checkout-lname').value;
@@ -1230,151 +1214,121 @@
                         const cityDet = document.getElementById('checkout-city-detail').value;
                         const dist = document.getElementById('checkout-district').value;
                         const postal = document.getElementById('checkout-postal').value;
+                        
                         fullAddress = `${fname} ${lname}\n${addr} ${addr2}\nKec. ${dist}, Kota/Kab. ${cityDet}\n${prov}, Indonesia ${postal}`;
                     }
-                    let sub = 0;
-                    const items = app.state.cart.map(i => { sub += (i.product.price * i.qty); return { productId: i.product.id, name: i.product.name, qty: i.qty, price: i.product.price }; });
-                    const total = sub + (sub * 0.11);
+                    
+                    let sub = 0; 
+                    const items = app.state.cart.map(i => { sub += (i.product.price * i.qty); return { name: i.product.name, qty: i.qty, price: i.product.price, pId: i.product.id }; });
+                    
+                    app.state.cart.forEach(i => { const p = app.db.products.find(prod => prod.id === i.product.id); if(p) p.stock -= i.qty; });
 
-                    try {
-                        const order = await app.api.post('/orders', { phone, address: fullAddress, shippingMethod: method, items, total: Math.round(total) });
-                        app.cart.clear(); app.closeDrawers();
-                        app.toast.show('Order Terbuat', `Sistem logistik mencatat tagihan #${order.id}.`, 'success');
-                        await app.catalog.loadProducts(); // refresh stock
-                        app.navigate('customer');
-                    } catch (err) {
-                        app.toast.show('Gagal', err.message || 'Checkout gagal.', 'danger');
-                    }
+                    const newOrd = { id: app.utils.genId(), date: new Date().toISOString().split('T')[0], customer: app.state.currentUser.username, phone: phone, address: fullAddress, shippingMethod: method, items: items, total: sub + (sub * 0.11), status: 'pending', proofUploaded: false, shippingStatus: 'Menunggu Validasi' };
+                    
+                    app.db.orders.unshift(newOrd); app.cart.clear(); app.closeDrawers(); app.toast.show('Order Terbuat', `Sistem logistik mencatat tagihan #${newOrd.id}.`, 'success'); app.navigate('customer');
                 }
             },
             toggleCart: () => { document.getElementById('cart-drawer').classList.toggle('active'); document.getElementById('global-overlay').classList.toggle('active'); },
             closeDrawers: () => { document.getElementById('cart-drawer').classList.remove('active'); document.getElementById('modal-checkout').classList.remove('active'); document.getElementById('global-overlay').classList.remove('active'); },
             switchDashTab: (tabId, el) => { const p = el.closest('.sidebar-menu'); p.querySelectorAll('li').forEach(li => li.classList.remove('active')); el.classList.add('active'); const c = el.closest('.dashboard-layout').querySelector('.dashboard-content'); c.querySelectorAll('.dash-tab').forEach(t => t.style.display = 'none'); document.getElementById(tabId).style.display = 'block'; },
 
-            // --- CUSTOMER DASHBOARD (from API) ---
+            // --- CUSTOMER DASHBOARD ---
             customer: {
-                renderDashboard: async () => {
+                renderDashboard: () => {
                     const u = app.state.currentUser; document.getElementById('cust-name-display').innerText = u.name;
-                    try {
-                        const myOrders = await app.api.get('/orders');
-                        const actives = myOrders.filter(o => o.status === 'pending' || (o.status === 'success' && o.shippingStatus !== 'Selesai'));
-                        const hist = myOrders.filter(o => o.status === 'success' && o.shippingStatus === 'Selesai');
-                        document.getElementById('cust-active-count').innerText = actives.length;
+                    const myO = app.db.orders.filter(o => o.customer === u.username);
+                    const actives = myO.filter(o => o.status === 'pending' || (o.status === 'success' && o.shippingStatus !== 'Selesai'));
+                    const hist = myO.filter(o => o.status === 'success' && o.shippingStatus === 'Selesai');
+                    
+                    document.getElementById('cust-active-count').innerText = actives.length;
+                    
+                    document.getElementById('customer-active-orders-container').innerHTML = actives.length ? actives.map(o => {
+                        const waLink = app.utils.generateWALink(o.id, '', false);
+                        const paymentHtml = o.status === 'success' ? '<span class="status-pill success">Lunas</span>' : '<span class="status-pill pending">Menunggu Validasi Bayar</span>';
+                        const shipAlert = o.shippingMethod === 'Ambil di Toko' ? 'Silakan bawa resi ke toko untuk pengambilan.' : `Dikirim via: <b>${o.shippingMethod}</b> ke <br><span style="white-space:pre-wrap;font-size:12px;display:inline-block;margin-top:4px;">${o.address}</span>`;
                         
-                        document.getElementById('customer-active-orders-container').innerHTML = actives.length ? actives.map(o => {
-                            const waLink = app.utils.generateWALink(o.id, '', false);
-                            const paymentHtml = o.status === 'success' ? '<span class="status-pill success">Lunas</span>' : '<span class="status-pill pending">Menunggu Validasi Bayar</span>';
-                            const shipAlert = o.shippingMethod === 'Ambil di Toko' ? 'Silakan bawa resi ke toko untuk pengambilan.' : `Dikirim via: <b>${o.shippingMethod}</b> ke <br><span style="white-space:pre-wrap;font-size:12px;display:inline-block;margin-top:4px;">${o.address}</span>`;
-                            return `
-                            <div class="order-card">
-                                <div class="order-header">
-                                    <div><h4 style="font-size:16px; margin-bottom:4px;">${o.id}</h4><span class="text-muted" style="font-size:12px;">${o.date}</span></div>
-                                    <div style="text-align:right;">${paymentHtml}<br><span class="status-pill info" style="margin-top:8px;">ðŸšš Pengiriman: ${o.shippingStatus}</span></div>
-                                </div>
-                                <div class="alert-box info" style="margin-bottom:16px;"><svg><use href="#icon-info"></use></svg><div>${shipAlert}</div></div>
-                                <table class="order-items-table">${o.items.map(i => `<tr><td>${i.name} <b>x${i.qty}</b></td><td style="text-align:right; font-weight:700;">${app.utils.formatRp(i.price * i.qty)}</td></tr>`).join('')}<tr><td style="padding-top:16px; font-weight:800;">TOTAL</td><td style="text-align:right; padding-top:16px; font-size:18px; font-weight:800; color:var(--color-primary);">${app.utils.formatRp(o.total)}</td></tr></table>
-                                <div class="d-flex justify-between align-center mt-4" style="border-top:1px solid var(--color-border); padding-top:16px;">
-                                    <a href="${waLink}" target="_blank" class="btn btn-wa"><svg style="width:16px;height:16px;fill:white;margin-right:8px;"><use href="#icon-wa"></use></svg>Chat CS via WA</a>
-                                    ${!o.proofUploaded ? `<button class="btn btn-outline" onclick="app.customer.uploadProof('${o.id}')">Upload Struk Transfer</button>` : (o.status==='pending' ? `<span style="color:var(--color-warning); font-size:13px; font-weight:600;">Bukti Sedang Diproses Admin</span>` : '')}
-                                </div>
-                            </div>`;
-                        }).join('') : '<p class="text-center text-muted" style="padding:40px;">Tidak ada pesanan aktif.</p>';
+                        return `
+                        <div class="order-card">
+                            <div class="order-header">
+                                <div><h4 style="font-size:16px; margin-bottom:4px;">${o.id}</h4><span class="text-muted" style="font-size:12px;">${o.date}</span></div>
+                                <div style="text-align:right;">${paymentHtml}<br><span class="status-pill info" style="margin-top:8px;">🚚 Pengiriman: ${o.shippingStatus}</span></div>
+                            </div>
+                            <div class="alert-box info" style="margin-bottom:16px;"><svg><use href="#icon-info"></use></svg><div>${shipAlert}</div></div>
+                            <table class="order-items-table">${o.items.map(i => `<tr><td>${i.name} <b>x${i.qty}</b></td><td style="text-align:right; font-weight:700;">${app.utils.formatRp(i.price * i.qty)}</td></tr>`).join('')}<tr><td style="padding-top:16px; font-weight:800;">TOTAL</td><td style="text-align:right; padding-top:16px; font-size:18px; font-weight:800; color:var(--color-primary);">${app.utils.formatRp(o.total)}</td></tr></table>
+                            
+                            <div class="d-flex justify-between align-center mt-4" style="border-top:1px solid var(--color-border); padding-top:16px;">
+                                <a href="${waLink}" target="_blank" class="btn btn-wa"><svg style="width:16px;height:16px;fill:white;margin-right:8px;"><use href="#icon-wa"></use></svg> Chat CS via WA</a>
+                                ${!o.proofUploaded ? `<button class="btn btn-outline" onclick="app.customer.uploadProof('${o.id}')">Upload Struk Transfer</button>` : (o.status==='pending' ? `<span style="color:var(--color-warning); font-size:13px; font-weight:600;">Bukti Sedang Diproses Admin</span>` : '')}
+                            </div>
+                        </div>`;
+                    }).join('') : '<p class="text-center text-muted" style="padding:40px;">Tidak ada pesanan aktif.</p>';
 
-                        document.getElementById('customer-history-container').innerHTML = hist.length ? hist.map(o => `<tr><td>${o.date}</td><td><b>${o.id}</b></td><td style="color:var(--color-primary); font-weight:800;">${app.utils.formatRp(o.total)}</td><td><span class="status-pill success">Selesai Dikirim</span></td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:40px;">Belum ada riwayat.</td></tr>';
-                    } catch(err) { app.toast.show('Error', err.message, 'danger'); }
+                    document.getElementById('customer-history-container').innerHTML = hist.length ? hist.map(o => `<tr><td>${o.date}</td><td><b>${o.id}</b></td><td style="color:var(--color-primary); font-weight:800;">${app.utils.formatRp(o.total)}</td><td><span class="status-pill success">Selesai Dikirim</span></td></tr>`).join('') : '<tr><td colspan="4" class="text-center text-muted" style="padding:40px;">Belum ada riwayat.</td></tr>';
                 },
-                uploadProof: async (oId) => {
-                    try {
-                        await app.api.put(`/orders/${oId}/proof`, { proofUploaded: true });
-                        app.toast.show('Berhasil', 'Bukti dikirim ke server validasi.', 'success');
-                        app.customer.renderDashboard();
-                    } catch(err) { app.toast.show('Gagal', err.message, 'danger'); }
-                }
+                uploadProof: (oId) => { const o = app.db.orders.find(o => o.id === oId); if(o){ o.proofUploaded = true; app.toast.show('Berhasil', 'Bukti dikirim ke server validasi.', 'success'); app.customer.renderDashboard(); } }
             },
 
-            // --- ADMIN DASHBOARD (from API) ---
+            // --- ADMIN DASHBOARD ---
             admin: {
-                renderDashboard: async () => {
-                    try {
-                        const f = document.getElementById('admin-filter-status').value;
-                        const statusQuery = f !== 'all' ? `?status=${f}` : '';
-                        const ords = await app.api.get('/orders' + statusQuery);
-                        const allOrds = await app.api.get('/orders');
+                renderDashboard: () => {
+                    const f = document.getElementById('admin-filter-status').value;
+                    let ords = app.db.orders; if (f !== 'all') ords = ords.filter(o => o.status === f);
+                    
+                    document.getElementById('admin-pending-badge').innerText = app.db.orders.filter(o => o.status === 'pending' && o.proofUploaded).length;
+
+                    document.getElementById('admin-table-orders').innerHTML = ords.length ? ords.map(o => {
+                        let actions = '';
+                        if (o.status === 'pending' && o.proofUploaded) {
+                            actions = `<button class="btn btn-primary" style="padding:6px 12px; font-size:12px;" onclick="app.admin.validate('${o.id}')">Validasi</button> <button class="btn btn-outline" style="padding:6px 12px; font-size:12px; color:var(--color-danger);" onclick="app.admin.cancelOrder('${o.id}')">Batal</button>`;
+                        } else if (o.status === 'success') {
+                            actions = `<button class="btn btn-outline" style="padding:6px 12px; font-size:12px; color:var(--color-warning);" onclick="app.admin.refundOrder('${o.id}')">Refund Uang</button>`;
+                        }
                         
-                        document.getElementById('admin-pending-badge').innerText = allOrds.filter(o => o.status === 'pending' && o.proofUploaded).length;
+                        const waLink = app.utils.generateWALink(o.id, o.phone, true);
+                        const waBtn = `<a href="${waLink}" target="_blank" title="Hubungi Customer"><svg style="width:20px;height:20px;fill:var(--color-wa);"><use href="#icon-wa"></use></svg></a>`;
 
-                        document.getElementById('admin-table-orders').innerHTML = ords.length ? ords.map(o => {
-                            let actions = '';
-                            if (o.status === 'pending' && o.proofUploaded) {
-                                actions = `<button class="btn btn-primary" style="padding:6px 12px; font-size:12px;" onclick="app.admin.validate('${o.id}')">Validasi</button> <button class="btn btn-outline" style="padding:6px 12px; font-size:12px; color:var(--color-danger);" onclick="app.admin.cancelOrder('${o.id}')">Batal</button>`;
-                            } else if (o.status === 'success') {
-                                actions = `<button class="btn btn-outline" style="padding:6px 12px; font-size:12px; color:var(--color-warning);" onclick="app.admin.refundOrder('${o.id}')">Refund Uang</button>`;
-                            }
-                            const waLink = app.utils.generateWALink(o.id, o.phone, true);
-                            const waBtn = `<a href="${waLink}" target="_blank" title="Hubungi Customer"><svg style="width:20px;height:20px;fill:var(--color-wa);"><use href="#icon-wa"></use></svg></a>`;
-                            return `<tr><td><b>${o.id}</b><br><div class="d-flex align-center gap-2 mt-2">${waBtn} <span style="font-size:12px;color:var(--color-text-muted);">${o.phone || '-'}</span></div></td><td>${o.customer}</td><td style="color:var(--color-primary); font-weight:700;">${app.utils.formatRp(o.total)}</td><td><span class="status-pill ${o.status}">${o.status}</span></td><td><div class="d-flex gap-2">${actions}</div></td></tr>`;
-                        }).join('') : `<tr><td colspan="5" class="text-center text-muted">Data logistik kosong.</td></tr>`;
+                        return `<tr><td><b>${o.id}</b><br><div class="d-flex align-center gap-2 mt-2">${waBtn} <span style="font-size:12px;color:var(--color-text-muted);">${o.phone}</span></div></td><td>${o.customer}</td><td style="color:var(--color-primary); font-weight:700;">${app.utils.formatRp(o.total)}</td><td><span class="status-pill ${o.status}">${o.status}</span></td><td><div class="d-flex gap-2">${actions}</div></td></tr>`;
+                    }).join('') : `<tr><td colspan="5" class="text-center text-muted">Data logistik kosong.</td></tr>`;
 
-                        // Customer management
-                        const custs = await app.api.get('/users');
-                        document.getElementById('admin-table-customers').innerHTML = (custs || []).map(c => `<tr><td>${c.username}</td><td>${c.name}</td><td><span class="status-pill ${c.isBlocked ? 'cancelled' : 'success'}">${c.isBlocked ? 'Diblokir' : 'Aktif'}</span></td><td><button class="btn btn-outline" style="padding:6px 12px; font-size:12px;" onclick="app.admin.toggleBlock('${c.username}')">${c.isBlocked ? 'Buka Blokir' : 'Blokir Akun'}</button></td></tr>`).join('');
-                    } catch(err) { app.toast.show('Error', err.message, 'danger'); }
+                    const custs = app.db.users.filter(u => u.role === 'customer');
+                    document.getElementById('admin-table-customers').innerHTML = custs.map(c => `<tr><td>${c.username}</td><td>${c.name}</td><td><span class="status-pill ${c.isBlocked ? 'cancelled' : 'success'}">${c.isBlocked ? 'Diblokir' : 'Aktif'}</span></td><td><button class="btn btn-outline" style="padding:6px 12px; font-size:12px;" onclick="app.admin.toggleBlock('${c.username}')">${c.isBlocked ? 'Buka Blokir' : 'Blokir Akun'}</button></td></tr>`).join('');
                 },
-                validate: async (id) => { try { await app.api.put(`/orders/${id}/status`, { status: 'success', shippingStatus: 'Dikemas - Menunggu Kurir/Ekspedisi' }); app.toast.show('Validasi Sukses', `Dana pesanan ${id} divalidasi.`, 'success'); app.admin.renderDashboard(); } catch(e) { app.toast.show('Gagal', e.message, 'danger'); } },
-                cancelOrder: async (id) => { try { await app.api.put(`/orders/${id}/status`, { status: 'cancelled', shippingStatus: 'Dibatalkan Sistem' }); app.toast.show('Dibatalkan', `Order ${id} dibatalkan.`, 'primary'); app.admin.renderDashboard(); } catch(e) { app.toast.show('Gagal', e.message, 'danger'); } },
-                refundOrder: async (id) => { try { await app.api.put(`/orders/${id}/status`, { status: 'refund', shippingStatus: 'Retur / Batal' }); app.toast.show('Refund Berhasil', `Dana Order ${id} direfund.`, 'warning'); app.admin.renderDashboard(); } catch(e) { app.toast.show('Gagal', e.message, 'danger'); } },
-                toggleBlock: async (username) => { try { await app.api.put(`/users/${username}/block`); app.toast.show('Update Akses', `Status blokir ${username} diubah.`, 'success'); app.admin.renderDashboard(); } catch(e) { app.toast.show('Gagal', e.message, 'danger'); } }
+                validate: (id) => { const o = app.db.orders.find(o => o.id === id); if(o) { o.status = 'success'; o.shippingStatus = 'Dikemas - Menunggu Kurir/Ekspedisi'; app.toast.show('Validasi Sukses', `Dana pesanan ${id} divalidasi.`, 'success'); app.admin.renderDashboard(); } },
+                cancelOrder: (id) => { const o = app.db.orders.find(o => o.id === id); if(o) { o.status = 'cancelled'; o.shippingStatus = 'Dibatalkan Sistem'; app.toast.show('Dibatalkan', `Order ${id} dibatalkan.`, 'primary'); app.admin.renderDashboard(); } },
+                refundOrder: (id) => { const o = app.db.orders.find(o => o.id === id); if(o) { o.status = 'refund'; o.shippingStatus = 'Retur / Batal'; app.toast.show('Refund Berhasil', `Dana Order ${id} direfund.`, 'warning'); app.admin.renderDashboard(); } },
+                toggleBlock: (username) => { const u = app.db.users.find(u => u.username === username); if(u) { u.isBlocked = !u.isBlocked; app.toast.show('Update Akses', `Status blokir ${username} diubah.`, 'success'); app.admin.renderDashboard(); } }
             },
 
-            // --- OWNER DASHBOARD (from API) ---
+            // --- OWNER DASHBOARD ---
             owner: {
-                renderDashboard: async () => {
-                    try {
-                        const allOrds = await app.api.get('/orders');
-                        const succs = allOrds.filter(o => o.status === 'success');
-                        const rev = succs.reduce((s, o) => s + o.total, 0);
-                        let items = 0; succs.forEach(o => (o.items || []).forEach(i => items += i.qty));
-                        document.getElementById('owner-total-revenue').innerText = app.utils.formatRp(rev);
-                        document.getElementById('owner-total-items').innerText = items;
-                        document.getElementById('owner-total-orders').innerText = succs.length;
-                        
-                        document.getElementById('owner-table-body').innerHTML = succs.length ? succs.map(o => `<tr><td>${o.date}</td><td class="td-bold">${o.id}</td><td>${o.customer}</td><td class="td-bold" style="color:var(--color-primary);">${app.utils.formatRp(o.total)}</td><td><span class="status-pill success">Lunas Tervalidasi</span></td></tr>`).join('') : `<tr><td colspan="5" class="text-center text-muted" style="padding:40px;">Buku besar kosong.</td></tr>`;
+                renderDashboard: () => {
+                    const succs = app.db.orders.filter(o => o.status === 'success');
+                    const rev = succs.reduce((s, o) => s + o.total, 0);
+                    let items = 0; succs.forEach(o => o.items.forEach(i => items += i.qty));
+                    document.getElementById('owner-total-revenue').innerText = app.utils.formatRp(rev);
+                    document.getElementById('owner-total-items').innerText = items;
+                    document.getElementById('owner-total-orders').innerText = succs.length;
+                    
+                    document.getElementById('owner-table-body').innerHTML = succs.length ? succs.map(o => `<tr><td>${o.date}</td><td class="td-bold">${o.id}</td><td>${o.customer}</td><td class="td-bold" style="color:var(--color-primary);">${app.utils.formatRp(o.total)}</td><td><span class="status-pill success">Lunas Tervalidasi</span></td></tr>`).join('') : `<tr><td colspan="5" class="text-center text-muted" style="padding:40px;">Buku besar kosong.</td></tr>`;
 
-                        // Stok Logic with Search (from API)
-                        await app.catalog.loadProducts();
-                        const sq = document.getElementById('owner-search-stock').value.toLowerCase();
-                        let stData = app.state.products; if(sq) stData = stData.filter(p => p.name.toLowerCase().includes(sq));
-                        document.getElementById('owner-table-stock').innerHTML = stData.slice(0, 30).map(p => `<tr><td>${p.id}</td><td><b>${p.category}</b><br>${p.name}</td><td style="font-weight:800; color:${p.stock < 20 ? 'var(--color-danger)' : 'var(--color-text-main)'}">${p.stock} Unit</td><td><button class="btn btn-outline" style="padding:4px 8px; font-size:16px;" onclick="app.owner.updateStock('${p.id}', -1)">-</button> <button class="btn btn-outline" style="padding:4px 8px; font-size:16px;" onclick="app.owner.updateStock('${p.id}', 1)">+</button></td></tr>`).join('');
+                    // Stok Logic with Search
+                    const sq = document.getElementById('owner-search-stock').value.toLowerCase();
+                    let stData = app.db.products; if(sq) stData = stData.filter(p => p.name.toLowerCase().includes(sq));
+                    document.getElementById('owner-table-stock').innerHTML = stData.slice(0, 30).map(p => `<tr><td>${p.id}</td><td><b>${p.category}</b><br>${p.name}</td><td style="font-weight:800; color:${p.stock < 20 ? 'var(--color-danger)' : 'var(--color-text-main)'}">${p.stock} Unit</td><td><button class="btn btn-outline" style="padding:4px 8px; font-size:16px;" onclick="app.owner.updateStock('${p.id}', -1)">-</button> <button class="btn btn-outline" style="padding:4px 8px; font-size:16px;" onclick="app.owner.updateStock('${p.id}', 1)">+</button></td></tr>`).join('');
 
-                        // Pengiriman
-                        document.getElementById('owner-table-shipping').innerHTML = succs.map(o => `<tr><td><b>${o.id}</b></td><td><span style="font-size:12px;background:var(--color-bg-subtle);padding:2px 6px;border-radius:4px;">${o.shippingMethod}</span><br><span style="font-size:12px;color:var(--color-text-muted);white-space:pre-wrap;">${o.address}</span></td><td><span class="status-pill ${o.shippingStatus === 'Selesai' ? 'success' : 'pending'}">${o.shippingStatus}</span></td><td><select class="form-input" style="padding:6px; width:auto;" onchange="app.owner.updateShipping('${o.id}', this.value)"><option value="" disabled selected>Pilih Aksi...</option><option value="Dalam Pengiriman">Kirim via Kurir/JNE</option><option value="Siap Diambil">Siap Diambil (Toko)</option><option value="Selesai">Tandai Selesai/Diterima</option><option value="Pengiriman Dibatalkan">Batalkan Pengiriman</option></select></td></tr>`).join('');
+                    // Pengiriman
+                    document.getElementById('owner-table-shipping').innerHTML = succs.map(o => `<tr><td><b>${o.id}</b></td><td><span style="font-size:12px;background:var(--color-bg-subtle);padding:2px 6px;border-radius:4px;">${o.shippingMethod}</span><br><span style="font-size:12px;color:var(--color-text-muted);white-space:pre-wrap;">${o.address}</span></td><td><span class="status-pill ${o.shippingStatus === 'Selesai' ? 'success' : 'pending'}">${o.shippingStatus}</span></td><td><select class="form-input" style="padding:6px; width:auto;" onchange="app.owner.updateShipping('${o.id}', this.value)"><option value="" disabled selected>Pilih Aksi...</option><option value="Dalam Pengiriman">Kirim via Kurir/JNE</option><option value="Siap Diambil">Siap Diambil (Toko)</option><option value="Selesai">Tandai Selesai/Diterima</option><option value="Pengiriman Dibatalkan">Batalkan Pengiriman</option></select></td></tr>`).join('');
 
-                        // Admin
-                        const admins = await app.api.get('/users/admins');
-                        document.getElementById('owner-table-admin').innerHTML = (admins || []).map(a => `<tr><td>${a.username}</td><td>${a.name}</td><td><button class="btn btn-outline" style="color:var(--color-danger); padding:6px 12px; font-size:12px;" onclick="app.owner.removeAdmin('${a.username}')">Hapus Akses</button></td></tr>`).join('');
-                    } catch(err) { app.toast.show('Error', err.message, 'danger'); }
+                    // Admin
+                    document.getElementById('owner-table-admin').innerHTML = app.db.users.filter(u => u.role === 'admin').map(a => `<tr><td>${a.username}</td><td>${a.name}</td><td><button class="btn btn-outline" style="color:var(--color-danger); padding:6px 12px; font-size:12px;" onclick="app.owner.removeAdmin('${a.username}')">Hapus Akses</button></td></tr>`).join('');
                 },
-                updateStock: async (id, amount) => {
-                    try { await app.api.put(`/products/${id}/stock`, { amount }); app.owner.renderDashboard(); } catch(e) { app.toast.show('Gagal', e.message, 'danger'); }
-                },
-                updateShipping: async (id, status) => {
-                    try { await app.api.put(`/orders/${id}/status`, { shippingStatus: status }); app.toast.show('Resi Diperbarui', `Status logistik resi ${id} diubah.`, 'success'); app.owner.renderDashboard(); } catch(e) { app.toast.show('Gagal', e.message, 'danger'); }
-                },
-                addAdminPrompt: async () => {
-                    const username = prompt("Username Admin Baru:"); if (!username) return;
-                    const password = prompt("Password:"); const name = prompt("Nama Lengkap Admin:");
-                    if (username && password && name) {
-                        try { await app.api.post('/users/admins', { username, password, name }); app.toast.show('Tersimpan', 'Akun Staf Admin berhasil didaftarkan.', 'success'); app.owner.renderDashboard(); } catch(e) { app.toast.show('Gagal', e.message, 'danger'); }
-                    }
-                },
-                removeAdmin: async (username) => {
-                    if(confirm(`Hapus izin akses admin ${username}?`)) {
-                        try { await app.api.del(`/users/admins/${username}`); app.toast.show('Dihapus', `Akun ${username} dinonaktifkan.`, 'primary'); app.owner.renderDashboard(); } catch(e) { app.toast.show('Gagal', e.message, 'danger'); }
-                    }
-                }
+                updateStock: (id, amount) => { const p = app.db.products.find(p => p.id === id); if (p) { p.stock += amount; if(p.stock<0) p.stock=0; app.owner.renderDashboard(); } },
+                updateShipping: (id, status) => { const o = app.db.orders.find(o => o.id === id); if(o) { o.shippingStatus = status; app.toast.show('Resi Diperbarui', `Status logistik resi ${id} diubah.`, 'success'); app.owner.renderDashboard(); } },
+                addAdminPrompt: () => { const username = prompt("Username Admin Baru:"); if (!username) return; const password = prompt("Password:"); const name = prompt("Nama Lengkap Admin:"); if (username && password && name) { app.db.users.push({ username, password, role: 'admin', name, isBlocked: false }); app.toast.show('Tersimpan', 'Akun Staf Admin berhasil didaftarkan.', 'success'); app.owner.renderDashboard(); } },
+                removeAdmin: (username) => { if(confirm(`Hapus izin akses admin ${username}?`)) { app.db.users = app.db.users.filter(u => u.username !== username); app.toast.show('Dihapus', `Akun ${username} dinonaktifkan.`, 'primary'); app.owner.renderDashboard(); } }
             },
 
-            // --- ORDER TRACKING SYSTEM (from API) ---
+            // --- ORDER TRACKING SYSTEM ---
             tracking: {
                 refreshTimer: null,
                 stepsConfig: [
@@ -1397,51 +1351,68 @@
                     return 0;
                 },
 
-                search: async () => {
+                search: () => {
                     const query = document.getElementById('tracking-input').value.trim().toUpperCase();
                     const container = document.getElementById('tracking-result-container');
                     if (!query) { app.toast.show('Info', 'Masukkan nomor pesanan terlebih dahulu.', 'primary'); return; }
 
-                    try {
-                        const order = await app.api.get(`/orders/${query}`);
-                        app.tracking.render(order);
-
-                        // Start auto-refresh every 5 seconds
-                        if (app.tracking.refreshTimer) clearInterval(app.tracking.refreshTimer);
-                        app.tracking.refreshTimer = setInterval(async () => {
-                            try {
-                                const refreshedOrder = await app.api.get(`/orders/${query}`);
-                                app.tracking.render(refreshedOrder);
-                            } catch(e) {}
-                        }, 5000);
-                    } catch(err) {
+                    const order = app.db.orders.find(o => o.id.toUpperCase() === query);
+                    if (!order) {
                         container.innerHTML = `
                             <div class="tracking-not-found">
                                 <svg><use href="#icon-search"></use></svg>
                                 <h3 style="margin-bottom:8px;">Pesanan Tidak Ditemukan</h3>
                                 <p class="text-muted">Nomor referensi <b>${query}</b> tidak ditemukan dalam sistem. Pastikan nomor pesanan sudah benar.</p>
                             </div>`;
+                        return;
                     }
+
+                    app.tracking.render(order);
+
+                    // Start auto-refresh every 5 seconds
+                    if (app.tracking.refreshTimer) clearInterval(app.tracking.refreshTimer);
+                    app.tracking.refreshTimer = setInterval(() => {
+                        const refreshedOrder = app.db.orders.find(o => o.id === order.id);
+                        if (refreshedOrder) app.tracking.render(refreshedOrder);
+                    }, 5000);
                 },
 
                 render: (order) => {
                     const container = document.getElementById('tracking-result-container');
                     const stepIndex = app.tracking.getStepIndex(order);
                     const isCancelled = order.status === 'cancelled' || order.status === 'refund';
+
                     const progressPercent = isCancelled ? 0 : Math.min((stepIndex / (app.tracking.stepsConfig.length - 1)) * 100, 100);
 
                     const stepsHtml = app.tracking.stepsConfig.map((step, i) => {
                         let cls = '';
-                        if (!isCancelled) { if (i < stepIndex) cls = 'completed'; else if (i === stepIndex) cls = 'active'; }
+                        if (!isCancelled) {
+                            if (i < stepIndex) cls = 'completed';
+                            else if (i === stepIndex) cls = 'active';
+                        }
                         const timeStr = (i <= stepIndex && !isCancelled) ? app.tracking.getStepTime(order, i) : '';
-                        return `<div class="timeline-step ${cls}"><div class="step-circle"><svg><use href="${step.icon}"></use></svg></div><div><div class="step-label">${step.label}</div>${timeStr ? `<div class="step-time">${timeStr}</div>` : ''}</div></div>`;
+                        return `
+                            <div class="timeline-step ${cls}">
+                                <div class="step-circle"><svg><use href="${step.icon}"></use></svg></div>
+                                <div>
+                                    <div class="step-label">${step.label}</div>
+                                    ${timeStr ? `<div class="step-time">${timeStr}</div>` : ''}
+                                </div>
+                            </div>`;
                     }).join('');
 
                     const statusLabel = isCancelled
                         ? `<span class="status-pill cancelled">${order.status === 'refund' ? 'Direfund' : 'Dibatalkan'}</span>`
                         : `<span class="live-indicator"><span class="live-dot"></span> Live Tracking Aktif</span>`;
 
-                    const itemsHtml = (order.items || []).map(i => `<div class="tracking-item-row"><div><div class="tracking-item-name">${i.name}</div><div class="tracking-item-qty">x${i.qty} item</div></div><div class="tracking-item-price">${app.utils.formatRp(i.price * i.qty)}</div></div>`).join('');
+                    const itemsHtml = order.items.map(i => `
+                        <div class="tracking-item-row">
+                            <div>
+                                <div class="tracking-item-name">${i.name}</div>
+                                <div class="tracking-item-qty">x${i.qty} item</div>
+                            </div>
+                            <div class="tracking-item-price">${app.utils.formatRp(i.price * i.qty)}</div>
+                        </div>`).join('');
 
                     container.innerHTML = `
                         <div class="tracking-result">
@@ -1450,25 +1421,40 @@
                                     <h3>Nomor Referensi</h3>
                                     <div class="tracking-order-id">${order.id}</div>
                                     <div class="tracking-meta">
-                                        <span>ðŸ“… ${order.date}</span>
-                                        <span>ðŸ“¦ ${order.shippingMethod}</span>
+                                        <span>📅 ${order.date}</span>
+                                        <span>📦 ${order.shippingMethod}</span>
                                         <span>${statusLabel}</span>
                                     </div>
                                 </div>
+
                                 <div class="tracking-timeline">
                                     <div class="timeline-steps">
                                         <div class="timeline-progress" style="width: ${progressPercent}%;"></div>
                                         ${stepsHtml}
                                     </div>
                                 </div>
+
                                 <div class="tracking-details">
                                     <div class="tracking-details-grid">
-                                        <div class="tracking-detail-item"><label>Status Pembayaran</label><span>${order.status === 'success' ? 'âœ… Lunas Tervalidasi' : order.status === 'pending' ? 'â³ Menunggu Validasi' : order.status === 'refund' ? 'â†©ï¸ Dana Dikembalikan' : 'âŒ Dibatalkan'}</span></div>
-                                        <div class="tracking-detail-item"><label>Status Pengiriman</label><span>${order.shippingStatus}</span></div>
-                                        <div class="tracking-detail-item"><label>Metode Pengiriman</label><span>${order.shippingMethod}</span></div>
-                                        <div class="tracking-detail-item"><label>Total Pembayaran</label><span style="color:var(--color-primary);">${app.utils.formatRp(order.total)}</span></div>
+                                        <div class="tracking-detail-item">
+                                            <label>Status Pembayaran</label>
+                                            <span>${order.status === 'success' ? '✅ Lunas Tervalidasi' : order.status === 'pending' ? '⏳ Menunggu Validasi' : order.status === 'refund' ? '↩️ Dana Dikembalikan' : '❌ Dibatalkan'}</span>
+                                        </div>
+                                        <div class="tracking-detail-item">
+                                            <label>Status Pengiriman</label>
+                                            <span>${order.shippingStatus}</span>
+                                        </div>
+                                        <div class="tracking-detail-item">
+                                            <label>Metode Pengiriman</label>
+                                            <span>${order.shippingMethod}</span>
+                                        </div>
+                                        <div class="tracking-detail-item">
+                                            <label>Total Pembayaran</label>
+                                            <span style="color:var(--color-primary);">${app.utils.formatRp(order.total)}</span>
+                                        </div>
                                     </div>
                                 </div>
+
                                 <div class="tracking-items-list">
                                     <h4>Detail Barang</h4>
                                     ${itemsHtml}
@@ -1491,8 +1477,8 @@
             }
         };
 
+
         document.addEventListener('DOMContentLoaded', app.init);
     </script>
-
 </body>
 </html>

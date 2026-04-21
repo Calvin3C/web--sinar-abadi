@@ -33,16 +33,17 @@ class CartController extends Controller
     public function add(Request $request)
     {
         $request->validate([
-            'id'       => 'required|string',
-            'name'     => 'required|string',
-            'price'    => 'required|integer',
-            'img'      => 'nullable|string',
-            'isLarge'  => 'nullable|boolean',
-            'stock'    => 'nullable|integer',
+            'id'    => 'required|string',
+            'name'  => 'required|string',
+            'price' => 'required|numeric',
+            'img'   => 'nullable|string',
+            'stock' => 'nullable|numeric',
         ]);
 
         $cart = session('cart', []);
         $productId = $request->input('id');
+        $isLarge = in_array($request->input('isLarge'), ['1', 'true', true, 1], true)
+                || $request->input('isLarge') === true;
 
         if (isset($cart[$productId])) {
             $cart[$productId]['qty'] += 1;
@@ -50,10 +51,10 @@ class CartController extends Controller
             $cart[$productId] = [
                 'id'      => $productId,
                 'name'    => $request->input('name'),
-                'price'   => $request->input('price'),
+                'price'   => (int) $request->input('price'),
                 'img'     => $request->input('img', ''),
-                'isLarge' => $request->input('isLarge', false),
-                'stock'   => $request->input('stock', 0),
+                'isLarge' => $isLarge,
+                'stock'   => (int) $request->input('stock', 0),
                 'qty'     => 1,
             ];
         }
