@@ -118,9 +118,9 @@ class CartController extends Controller
     }
 
     /**
-     * Proses checkout — kirim order ke Go backend.
+     * Simpan data logistik ke session dan lanjut ke pembayaran.
      */
-    public function checkout(Request $request)
+    public function setLogistics(Request $request)
     {
         $request->validate([
             'phone'          => 'required|string',
@@ -128,9 +128,58 @@ class CartController extends Controller
             'shippingMethod' => 'required|string',
         ]);
 
+        session([
+            'checkout_logistics' => $request->only('phone', 'address', 'shippingMethod')
+        ]);
+
+        return redirect()->route('cart.payment');
+    }
+
+    /**
+     * Tampilkan halaman pembayaran setelah logistik diisi.
+     */
+    public function paymentPage()
+    {
+        $cart = session('cart', []);
+        if (empty($cart)) return redirect()->route('cart.index')->with('error', 'Keranjang kosong.');
+
+        $logistics = session('checkout_logistics');
+        if (!$logistics) return redirect()->route('cart.index')->with('error', 'Silahkan isi data logistik terlebih dahulu.');
+
+        $subtotal = collect($cart)->sum(fn($item) => $item['price'] * $item['qty']);
+        $tax = round($subtotal * 0.11);
+        
+        // Simulasi ongkir sederhana (mengikuti backend logic)
+        $shippingCost = 0;
+        $method = strtolower($logistics['shippingMethod']);
+        if (str_contains($method, 'kurir toko')) {
+            $shippingCost = 50000;
+        } elseif (str_contains($method, 'jne')) {
+            $totalQty = collect($cart)->sum('qty');
+            $shippingCost = 20000 + ($totalQty * 5000);
+        }
+
+        $totalProduct = $subtotal + $tax;
+        $grandTotal = $totalProduct + $shippingCost;
+
+        return view('cart.payment', compact('cart', 'logistics', 'subtotal', 'tax', 'shippingCost', 'grandTotal'));
+    }
+
+    /**
+     * Proses checkout — kirim order ke Go backend.
+     */
+    public function checkout(Request $request)
+    {
+        $request->validate([
+            'paymentMethod' => 'required|string',
+        ]);
+
+        $logistics = session('checkout_logistics');
+        if (!$logistics) return redirect()->route('cart.index')->with('error', 'Data logistik tidak ditemukan.');
+
         $cart = session('cart', []);
         if (empty($cart)) {
-            return back()->with('error', 'Keranjang kosong.');
+            return redirect()->route('cart.index')->with('error', 'Keranjang kosong.');
         }
 
         $items = [];
@@ -145,12 +194,13 @@ class CartController extends Controller
 
         $subtotal = collect($cart)->sum(fn($item) => $item['price'] * $item['qty']);
         $tax = round($subtotal * 0.11);
-        $total = $subtotal + $tax;
+        $total = $subtotal + $tax; // Total produk sebelum ongkir, ongkir di-kalkulasi backend
 
         $result = $this->api->createOrder(session('auth_token'), [
-            'phone'          => $request->input('phone'),
-            'address'        => $request->input('address'),
-            'shippingMethod' => $request->input('shippingMethod'),
+            'phone'          => $logistics['phone'],
+            'address'        => $logistics['address'],
+            'shippingMethod' => $logistics['shippingMethod'],
+            'paymentMethod'  => $request->input('paymentMethod'),
             'items'          => $items,
             'total'          => $total,
         ]);
@@ -160,9 +210,9 @@ class CartController extends Controller
             return back()->with('error', $error);
         }
 
-        // Clear cart after successful checkout
-        session()->forget('cart');
+        // Clear session after successful checkout
+        session()->forget(['cart', 'checkout_logistics']);
 
-        return redirect()->route('customer.dashboard')->with('success', 'Pesanan berhasil dibuat! ID: ' . ($result['data']['id'] ?? ''));
+        return redirect()->route('customer.dashboard')->with('success', 'Pesanan berhasil dibuat! Segera lakukan pembayaran.');
     }
 }

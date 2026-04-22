@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"sinar-abadi-backend/config"
 	"sinar-abadi-backend/models"
-
-	"github.com/gin-gonic/gin"
+	"sinar-abadi-backend/services"
 )
 
 // ---- Request DTOs ----
@@ -22,13 +22,13 @@ type CheckoutItemInput struct {
 	Price     int64  `json:"price" binding:"required"`
 }
 
-// CheckoutInput represents the full checkout request body.
 type CheckoutInput struct {
-	Phone          string              `json:"phone" binding:"required"`
+	Phone          string              `json:"phone" binding:"required"` // WhatsApp number
 	Address        string              `json:"address" binding:"required"`
 	ShippingMethod string              `json:"shippingMethod" binding:"required"`
+	PaymentMethod  string              `json:"paymentMethod" binding:"required"` // Virtual Account, Credit Card
 	Items          []CheckoutItemInput `json:"items" binding:"required,min=1"`
-	Total          int64               `json:"total" binding:"required"`
+	Total          int64               `json:"total" binding:"required"` // Total product cost
 }
 
 // StatusUpdateInput represents the request body for updating order status.
@@ -102,15 +102,28 @@ func CreateOrder(c *gin.Context) {
 		})
 	}
 
+	logisticsSvc := services.NewLogisticsService()
+	paymentSvc := services.NewPaymentService()
+
+	// Calculate shipping cost
+	shippingCost, err := logisticsSvc.CalculateShippingCost(input.ShippingMethod, input.Address, orderItems)
+	if err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	orderID := generateOrderID()
+
 	order := models.Order{
-		ID:             generateOrderID(),
+		ID:             orderID,
 		Date:           time.Now().Format("2006-01-02"),
 		CustomerID:     userID.(uint),
 		CustomerName:   username.(string),
 		Phone:          input.Phone,
 		Address:        input.Address,
 		ShippingMethod: input.ShippingMethod,
-		Total:          input.Total,
+		Total:          input.Total + shippingCost,
 		Status:         "pending",
 		ShippingStatus: "Menunggu Validasi",
 		ProofUploaded:  false,
@@ -123,10 +136,46 @@ func CreateOrder(c *gin.Context) {
 		return
 	}
 
+	// Create Shipping record
+	shipping := models.Shipping{
+		OrderID:            orderID,
+		ShippingMethodName: input.ShippingMethod,
+		TrackingNumber:     input.Phone, // Use Phone as WhatsApp tracking number
+		ShippingCost:       shippingCost,
+		DestinationAddress: input.Address,
+	}
+
+	if result := tx.Create(&shipping); result.Error != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan data logistik"})
+		return
+	}
+
+	// Initiate Payment
+	_, err = paymentSvc.InitiatePayment(orderID, input.PaymentMethod, order.Total)
+	if err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	payment := models.Payment{
+		OrderID:       orderID,
+		PaymentMethod: input.PaymentMethod,
+		AmountPaid:    order.Total,
+		PaymentStatus: "Pending",
+	}
+
+	if result := tx.Create(&payment); result.Error != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan data pembayaran"})
+		return
+	}
+
 	tx.Commit()
 
-	// Reload with items for response
-	config.DB.Preload("Items").First(&order, "id = ?", order.ID)
+	// Reload with items, shipping, and payment for response
+	config.DB.Preload("Items").Preload("Shipping").Preload("Payment").First(&order, "id = ?", order.ID)
 
 	c.JSON(http.StatusCreated, order)
 }

@@ -17,6 +17,8 @@ type Order struct {
 	ShippingStatus string      `gorm:"size:100;not null;default:'Menunggu Validasi'" json:"shippingStatus"`
 	ProofUploaded  bool        `gorm:"default:false" json:"proofUploaded"`
 	Items          []OrderItem `gorm:"foreignKey:OrderID" json:"items"`
+	Shipping       *Shipping   `gorm:"foreignKey:OrderID" json:"shipping"`
+	Payment        *Payment    `gorm:"foreignKey:OrderID" json:"payment"`
 	CreatedAt      time.Time   `json:"createdAt"`
 	UpdatedAt      time.Time   `json:"updatedAt"`
 }

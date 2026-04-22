@@ -29,6 +29,9 @@ func main() {
 		&models.Product{},
 		&models.Order{},
 		&models.OrderItem{},
+		&models.PaymentMethod{},
+		&models.Shipping{},
+		&models.Payment{},
 	); err != nil {
 		log.Fatalf("❌ Auto-migration failed: %v", err)
 	}

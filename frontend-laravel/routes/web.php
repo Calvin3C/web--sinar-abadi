@@ -30,6 +30,10 @@ Route::middleware('auth.api:customer')->group(function () {
     Route::post('/cart/add', [CartController::class, 'add'])->name('cart.add');
     Route::post('/cart/update', [CartController::class, 'update'])->name('cart.update');
     Route::delete('/cart/{productId}', [CartController::class, 'remove'])->name('cart.remove');
+    
+    // New Logistic & Payment Flow
+    Route::post('/cart/set-logistics', [CartController::class, 'setLogistics'])->name('cart.setLogistics');
+    Route::get('/cart/payment', [CartController::class, 'paymentPage'])->name('cart.payment');
     Route::post('/checkout', [CartController::class, 'checkout'])->name('cart.checkout');
 });
 
