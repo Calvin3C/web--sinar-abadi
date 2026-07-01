@@ -35,12 +35,21 @@ class OwnerController extends Controller
         $admins = $adminResult['success'] ? $adminResult['data'] : [];
 
         // Calculate stats
-        $completedOrders = array_filter($orders, fn($o) => in_array(strtolower($o['status'] ?? ''), ['success', 'completed']));
-        $totalRevenue = 0;
+        $completedOrders = array_filter($orders, fn($o) => strtolower($o['status'] ?? '') === 'completed');
+        
+        $todayDate = date('Y-m-d');
+        $totalRevenueKotor = 0;
+        $totalRevenueBersih = 0;
+        
         foreach ($completedOrders as $order) {
-            if (isset($order['items']) && is_array($order['items'])) {
-                foreach ($order['items'] as $item) {
-                    $totalRevenue += ($item['price'] * $item['qty']);
+            $updatedAt = $order['updatedAt'] ?? ($order['updated_at'] ?? ($order['date'] ?? ''));
+            $orderDate = substr($updatedAt, 0, 10);
+            if ($orderDate === $todayDate) {
+                $totalRevenueKotor += $order['total'] ?? 0;
+                if (isset($order['items']) && is_array($order['items'])) {
+                    foreach ($order['items'] as $item) {
+                        $totalRevenueBersih += (($item['price'] ?? 0) * ($item['qty'] ?? 0));
+                    }
                 }
             }
         }
@@ -50,14 +59,27 @@ class OwnerController extends Controller
         $profileResult = $this->api->getProfile($token);
         $profile = $profileResult['success'] ? $profileResult['data'] : null;
 
+        $warehouseResult = $this->api->getWarehouses($token);
+        $warehouses = $warehouseResult['success'] ? $warehouseResult['data'] : [];
+
+        $inboundResult = $this->api->getInbounds($token);
+        $inbounds = $inboundResult['success'] ? $inboundResult['data'] : [];
+
+        $transferResult = $this->api->getStockTransfers($token);
+        $stockTransfers = $transferResult['success'] ? $transferResult['data'] : [];
+
         return Inertia::render('Owner/Dashboard', [
             'products' => $products,
             'orders' => $orders,
             'admins' => $admins,
+            'warehouses' => $warehouses,
+            'inbounds' => $inbounds,
+            'stockTransfers' => $stockTransfers,
             'username' => session('auth_username', 'Owner'),
             'profile' => $profile,
             'stats' => [
-                'totalRevenue' => $totalRevenue,
+                'totalRevenueKotor' => $totalRevenueKotor,
+                'totalRevenueBersih' => $totalRevenueBersih,
                 'salesCount' => count($completedOrders),
                 'stockIssuesCount' => $stockIssues,
                 'totalAdmins' => count($admins),
@@ -88,10 +110,20 @@ class OwnerController extends Controller
      */
     public function updateStock(Request $request, string $productId)
     {
-        $request->validate(['amount' => 'required|integer']);
+        $request->validate([
+            'amount' => 'required|integer',
+            'warehouseId' => 'nullable|integer',
+            'variantId' => 'nullable|integer',
+        ]);
         $token = session('auth_token');
 
-        $result = $this->api->updateStock($token, $productId, $request->input('amount'));
+        $result = $this->api->updateStock(
+            $token, 
+            $productId, 
+            $request->input('amount'),
+            $request->input('warehouseId'),
+            $request->input('variantId')
+        );
 
         if (!$result['success']) {
             return back()->with('error', 'Gagal memperbarui stok.');
@@ -100,6 +132,37 @@ class OwnerController extends Controller
         return back()->with('success', $result['data']['message'] ?? 'Stok berhasil diperbarui.');
     }
 
+    /**
+     * Transfer stok antar gudang.
+     */
+    public function transferStock(Request $request, string $productId)
+    {
+        $request->validate([
+            'quantity' => 'required|integer|min:1',
+            'fromWarehouseId' => 'required|integer',
+            'toWarehouseId' => 'required|integer',
+            'variantId' => 'nullable|integer',
+        ]);
+
+        $token = session('auth_token');
+
+        $result = $this->api->transferStock(
+            $token, 
+            $productId, 
+            [
+                'fromWarehouseId' => (int) $request->input('fromWarehouseId'),
+                'toWarehouseId' => (int) $request->input('toWarehouseId'),
+                'quantity' => (int) $request->input('quantity'),
+                'variantId' => $request->input('variantId') ? (int) $request->input('variantId') : null,
+            ]
+        );
+
+        if (isset($result['error']) || (isset($result['success']) && $result['success'] === false)) {
+            return back()->with('error', $result['error'] ?? $result['message'] ?? 'Gagal melakukan transfer stok.');
+        }
+
+        return back()->with('success', 'Transfer stok berhasil.');
+    }
 
     /**
      * Buat akun admin baru.
@@ -183,10 +246,14 @@ class OwnerController extends Controller
             ->values()
             ->all();
 
+        $warehouseResult = $this->api->getWarehouses(session('auth_token'));
+        $warehouses = $warehouseResult['success'] ? $warehouseResult['data'] : [];
+
         return Inertia::render('Owner/ProductForm', [
             'mode' => 'create',
             'product' => null,
             'categories' => $categories,
+            'warehouses' => $warehouses,
             'username' => session('auth_username', 'Owner'),
         ]);
     }
@@ -210,10 +277,14 @@ class OwnerController extends Controller
             ->values()
             ->all();
 
+        $warehouseResult = $this->api->getWarehouses($token);
+        $warehouses = $warehouseResult['success'] ? $warehouseResult['data'] : [];
+
         return Inertia::render('Owner/ProductForm', [
             'mode' => 'edit',
             'product' => $result['data'],
             'categories' => $categories,
+            'warehouses' => $warehouses,
             'username' => session('auth_username', 'Owner'),
         ]);
     }
@@ -268,7 +339,6 @@ class OwnerController extends Controller
             'minPurchase' => (int) $request->input('minPurchase', 1),
             'price'       => (int) $request->input('price'),
             'stock'       => (int) $request->input('stock'),
-            'isLarge'     => (bool) $request->input('isLarge', false),
             'img'         => $imgUrl,
         ]);
 
@@ -325,7 +395,6 @@ class OwnerController extends Controller
             'unit'        => $request->input('unit', ''),
             'minPurchase' => (int) $request->input('minPurchase', 1),
             'price'       => (int) $request->input('price'),
-            'isLarge'     => (bool) $request->input('isLarge', false),
             'img'         => $imgUrl,
         ]);
 
@@ -357,12 +426,14 @@ class OwnerController extends Controller
         $request->validate([
             'name'  => 'required|string|max:100',
             'price' => 'nullable|integer|min:0',
+            'stock' => 'nullable|integer|min:0',
         ]);
 
         $token = session('auth_token');
         $result = $this->api->createVariant($token, $productId, [
             'name'  => $request->input('name'),
             'price' => (int) $request->input('price', 0),
+            'stock' => (int) $request->input('stock', 0),
         ]);
 
         if (!$result['success']) {
@@ -422,5 +493,89 @@ class OwnerController extends Controller
         }
 
         return back()->with('success', 'Profil berhasil diperbarui.');
+    }
+
+    public function storeWarehouse(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string',
+            'description' => 'nullable|string',
+        ]);
+        $token = session('auth_token');
+        $result = $this->api->createWarehouse($token, $request->all());
+
+        if (!$result['success']) {
+            return back()->with('error', $result['data']['message'] ?? 'Gagal membuat gudang.');
+        }
+
+        return back()->with('success', 'Gudang berhasil dibuat.');
+    }
+
+    public function updateWarehouse(Request $request, string $id)
+    {
+        $request->validate([
+            'name' => 'required|string',
+            'description' => 'nullable|string',
+            'isActive' => 'required|boolean',
+        ]);
+        $token = session('auth_token');
+        $result = $this->api->updateWarehouse($token, $id, $request->all());
+
+        if (!$result['success']) {
+            return back()->with('error', $result['data']['message'] ?? 'Gagal memperbarui gudang.');
+        }
+
+        return back()->with('success', 'Gudang berhasil diperbarui.');
+    }
+
+    public function storeInbound(Request $request)
+    {
+        $request->validate([
+            'supplierName' => 'required|string',
+            'expectedDate' => 'required|date',
+            'items' => 'required|array',
+        ]);
+        
+        $token = session('auth_token');
+        
+        $items = array_map(function($item) {
+            if (isset($item['variantId']) && $item['variantId'] === '') {
+                $item['variantId'] = null;
+            } else if (isset($item['variantId'])) {
+                $item['variantId'] = (int) $item['variantId'];
+            }
+            return $item;
+        }, $request->input('items'));
+
+        $data = [
+            'supplierName' => $request->input('supplierName'),
+            'expectedDate' => date('c', strtotime($request->input('expectedDate'))),
+            'totalCost' => collect($items)->sum(fn($item) => ($item['qty'] ?? 0) * ($item['unitCost'] ?? 0)),
+            'items' => $items,
+        ];
+        
+        $result = $this->api->createInbound($token, $data);
+
+        if (!$result['success']) {
+            return back()->with('error', $result['data']['message'] ?? 'Gagal membuat inbound.');
+        }
+
+        return back()->with('success', 'Inbound berhasil dibuat.');
+    }
+
+    public function updateInboundStatus(Request $request, $id)
+    {
+        $request->validate([
+            'status' => 'required|string|in:received,cancelled',
+        ]);
+
+        $token = session('auth_token');
+        $result = $this->api->updateInboundStatus($token, $id, ['status' => $request->input('status')]);
+
+        if (!$result['success']) {
+            return back()->with('error', $result['data']['message'] ?? 'Gagal memperbarui status inbound.');
+        }
+
+        return back()->with('success', 'Status inbound berhasil diperbarui.');
     }
 }

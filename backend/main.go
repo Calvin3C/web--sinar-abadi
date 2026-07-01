@@ -38,10 +38,27 @@ func main() {
 		&models.Shipping{},
 		&models.Payment{},
 		&models.CustomerAddress{},
+		&models.Warehouse{},
+		&models.WarehouseStock{},
+		&models.InboundOrder{},
+		&models.InboundOrderItem{},
+		&models.ProductVariant{},
+		&models.StockTransfer{},
+		&models.DeliveryLocation{},
+		&models.FleetVehicle{},
 	); err != nil {
 		log.Fatalf("❌ Auto-migration failed: %v", err)
 	}
 	log.Println("✅ Database migration completed")
+
+	// Drop deprecated is_large column if it still exists
+	if config.DB.Migrator().HasColumn(&models.Product{}, "is_large") {
+		if err := config.DB.Migrator().DropColumn(&models.Product{}, "is_large"); err != nil {
+			log.Printf("⚠️ Could not drop is_large column: %v", err)
+		} else {
+			log.Println("✅ Dropped deprecated is_large column from products")
+		}
+	}
 
 	// Run seeder (only seeds if tables are empty)
 	seed.RunSeeder(config.DB)
@@ -58,6 +75,13 @@ func main() {
 		AllowCredentials: false,
 		MaxAge:           12 * time.Hour,
 	}))
+
+	// Serve static files for images
+	r.Static("/images", "./uploads")
+	r.Static("/storage/products", "./uploads/products")
+	
+	// Proxy Laravel storage files so mobile devices can access them through Go's port
+	r.Static("/storage/proofs", "../frontend-laravel/storage/app/public/proofs")
 
 	// ==================================================================
 	// API Routes
@@ -76,6 +100,7 @@ func main() {
 	productAuth := api.Group("/products")
 	productAuth.Use(middleware.AuthRequired())
 	{
+		productAuth.POST("/upload", middleware.RoleRequired("admin", "owner"), controllers.UploadProductImage)
 		productAuth.POST("", middleware.RoleRequired("admin", "owner"), controllers.CreateProduct)
 		productAuth.PUT("/:id/stock", middleware.RoleRequired("owner"), controllers.UpdateStock)
 		productAuth.PUT("/:id", middleware.RoleRequired("admin", "owner"), controllers.UpdateProduct)
@@ -114,8 +139,20 @@ func main() {
 	api.POST("/biteship/webhook", controllers.BiteshipWebhook)
 	api.GET("/biteship/tracking/:id", controllers.GetTracking)
 
+	// --- Chatbot (Public/Customer) ---
+	api.POST("/chatbot", controllers.HandleChatbot)
+
 	// --- Midtrans Payment Webhook (Public) ---
 	api.POST("/midtrans/webhook", controllers.MidtransWebhook)
+
+	// --- Delivery (Kurir Toko Sinar Abadi) ---
+	api.GET("/delivery/locations", controllers.GetDeliveryLocations) // Public: list served locations
+	deliveryRoutes := api.Group("/delivery")
+	deliveryRoutes.Use(middleware.AuthRequired())
+	{
+		deliveryRoutes.GET("/fleet", middleware.RoleRequired("admin", "owner"), controllers.GetFleetStatus)
+		deliveryRoutes.PUT("/:orderId/status", middleware.RoleRequired("admin", "owner"), controllers.UpdateDeliveryStatus)
+	}
 
 	// --- Users (Admin/Owner) ---
 	userRoutes := api.Group("/users")
@@ -132,6 +169,28 @@ func main() {
 		userRoutes.POST("/admins", middleware.RoleRequired("owner"), controllers.CreateAdmin)
 		userRoutes.PUT("/admins/:username", middleware.RoleRequired("owner"), controllers.UpdateAdmin)
 		userRoutes.DELETE("/admins/:username", middleware.RoleRequired("owner"), controllers.DeleteAdmin)
+	}
+
+	// --- Warehouses & Inbounds (Owner only) ---
+	inventoryRoutes := api.Group("")
+	inventoryRoutes.Use(middleware.AuthRequired(), middleware.RoleRequired("owner"))
+	{
+		inventoryRoutes.GET("/warehouses", controllers.GetWarehouses)
+		inventoryRoutes.POST("/warehouses", controllers.CreateWarehouse)
+		inventoryRoutes.PUT("/warehouses/:id", controllers.UpdateWarehouse)
+
+		inventoryRoutes.POST("/products/:id/transfer", controllers.TransferStock)
+
+		// Stock Adjustment
+		inventoryRoutes.POST("/products/:id/stock", controllers.UpdateStock)
+
+		// Outbound/Stock Transfers
+		inventoryRoutes.GET("/stock-transfers", controllers.GetStockTransfers)
+
+		// Inbounds
+		inventoryRoutes.GET("/inbounds", controllers.GetInbounds)
+		inventoryRoutes.POST("/inbounds", controllers.CreateInbound)
+		inventoryRoutes.PUT("/inbounds/:id/status", controllers.UpdateInboundStatus)
 	}
 
 	// ==================================================================

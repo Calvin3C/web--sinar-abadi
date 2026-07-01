@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -29,6 +30,7 @@ type CheckoutItemInput struct {
 	Width     int    `json:"width"`  // width in cm
 	Height    int    `json:"height"` // height in cm
 	Color     string `json:"color"`
+	VariantID *uint  `json:"variantId"`
 }
 
 type CheckoutInput struct {
@@ -40,6 +42,7 @@ type CheckoutInput struct {
 	ShippingCost       int64               `json:"shippingCost"`                     // Provided by frontend from Biteship
 	CourierCode        string              `json:"courierCode"`                      // e.g. "jne", "sicepat" from Biteship
 	CourierServiceCode string              `json:"courierServiceCode"`               // e.g. "reg", "best", "jtr", "gokil" from Biteship
+	DeliveryLocationID *uint               `json:"deliveryLocationId"`               // For Kurir Toko Sinar Abadi
 	Items              []CheckoutItemInput `json:"items" binding:"required,min=1"`
 	Total              int64               `json:"total" binding:"required"` // Total product cost
 }
@@ -69,6 +72,49 @@ func generateOrderID() string {
 	)
 }
 
+// getPrioritizedWarehouses returns a list of warehouse IDs sorted by deduction priority: Toko, Gudang Y, Gudang M, others.
+func getPrioritizedWarehouses() []uint {
+	var warehouses []models.Warehouse
+	config.DB.Find(&warehouses)
+
+	priority := func(name string) int {
+		lower := strings.ToLower(name)
+		if strings.Contains(lower, "toko") {
+			return 1
+		}
+		if strings.Contains(lower, "gudang y") {
+			return 2
+		}
+		if strings.Contains(lower, "gudang m") {
+			return 3
+		}
+		return 4
+	}
+
+	type whPriority struct {
+		ID       uint
+		Priority int
+	}
+	var list []whPriority
+	for _, w := range warehouses {
+		list = append(list, whPriority{ID: w.ID, Priority: priority(w.Name)})
+	}
+	
+	for i := 0; i < len(list); i++ {
+		for j := i + 1; j < len(list); j++ {
+			if list[i].Priority > list[j].Priority {
+				list[i], list[j] = list[j], list[i]
+			}
+		}
+	}
+
+	var sorted []uint
+	for _, w := range list {
+		sorted = append(sorted, w.ID)
+	}
+	return sorted
+}
+
 // ---- Handlers ----
 
 // CreateOrder handles customer checkout.
@@ -94,6 +140,10 @@ func CreateOrder(c *gin.Context) {
 
 	orderID := generateOrderID()
 
+	// Map to keep track of the primary warehouse used for each item
+	itemPrimaryWarehouse := make(map[string]uint)
+	prioritizedWhIDs := getPrioritizedWarehouses()
+
 	// Validate stock availability and decrement
 	tx := config.DB.Begin()
 	for _, item := range input.Items {
@@ -104,26 +154,86 @@ func CreateOrder(c *gin.Context) {
 			return
 		}
 
-		// Calculate current stock from stock_logs
-		currentStock := getStockByProductID(item.ProductID)
+		var allStocks []models.WarehouseStock
+		query := tx.Where("product_id = ?", item.ProductID)
+		if item.VariantID != nil {
+			query = query.Where("variant_id = ?", *item.VariantID)
+		} else {
+			query = query.Where("variant_id IS NULL")
+		}
+		query.Find(&allStocks)
 
-		if currentStock < item.Qty {
+		totalAvailable := 0
+		stockMap := make(map[uint]*models.WarehouseStock)
+		for i, ws := range allStocks {
+			totalAvailable += ws.Stock
+			stockMap[ws.WarehouseID] = &allStocks[i]
+		}
+
+		if totalAvailable < item.Qty {
 			tx.Rollback()
-			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Stok %s tidak mencukupi (tersisa %d)", product.Name, currentStock)})
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Stok %s tidak mencukupi (tersisa %d)", product.Name, totalAvailable)})
 			return
 		}
-		// Increase sold count only (stock is managed via stock_logs)
-		tx.Model(&product).Update("sold", product.Sold+item.Qty)
 
-		// Log stock deduction due to sale
-		newStock := currentStock - item.Qty
-		tx.Create(&models.StockLog{
-			ProductID:   item.ProductID,
-			ChangeType:  "deduction",
-			QtyChanged:  -item.Qty,
-			FinalStock:  newStock,
-			Description: fmt.Sprintf("Penjualan (Order %s)", orderID),
-		})
+		remainingQty := item.Qty
+		var primaryWarehouseID *uint
+
+		for _, whID := range prioritizedWhIDs {
+			if remainingQty <= 0 {
+				break
+			}
+			ws, exists := stockMap[whID]
+			if !exists || ws.Stock <= 0 {
+				continue
+			}
+
+			if primaryWarehouseID == nil {
+				copyID := whID
+				primaryWarehouseID = &copyID
+			}
+
+			deduct := remainingQty
+			if ws.Stock < remainingQty {
+				deduct = ws.Stock
+			}
+
+			remainingQty -= deduct
+			newStock := ws.Stock - deduct
+			ws.Stock = newStock
+
+			tx.Model(ws).Update("stock", newStock)
+
+			// Log stock deduction due to sale
+			copyWhID := whID
+			tx.Create(&models.StockLog{
+				ProductID:   item.ProductID,
+				VariantID:   item.VariantID,
+				WarehouseID: &copyWhID,
+				ChangeType:  "deduction",
+				QtyChanged:  -deduct,
+				FinalStock:  newStock,
+				Description: fmt.Sprintf("Penjualan (Order %s)", orderID),
+			})
+		}
+
+		if remainingQty > 0 {
+			tx.Rollback()
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Gagal memotong stok %s", product.Name)})
+			return
+		}
+
+		// Save the primary warehouse for the order items
+		itemKey := item.ProductID
+		if item.VariantID != nil {
+			itemKey = fmt.Sprintf("%s-%d", item.ProductID, *item.VariantID)
+		}
+		if primaryWarehouseID != nil {
+			itemPrimaryWarehouse[itemKey] = *primaryWarehouseID
+		}
+
+		// Increase sold count only (global stock is calculated from stock logs)
+		tx.Model(&product).Update("sold", product.Sold+item.Qty)
 	}
 
 	// Build order items
@@ -135,13 +245,13 @@ func CreateOrder(c *gin.Context) {
 		itemWidth := item.Width
 		itemHeight := item.Height
 
-		if itemWeight <= 0 || itemLength <= 0 || itemWidth <= 0 || itemHeight <= 0 {
-			var product models.Product
-			if err := config.DB.Where("id = ?", item.ProductID).First(&product).Error; err == nil {
-				if itemWeight <= 0 { itemWeight = product.Weight }
-				if itemLength <= 0 { itemLength = product.Length }
-				if itemWidth <= 0 { itemWidth = product.Width }
-				if itemHeight <= 0 { itemHeight = product.Height }
+		var productCopy models.Product
+		if itemWeight <= 0 || itemLength <= 0 || itemWidth <= 0 || itemHeight <= 0 || true { // We need it for warehouse logic anyway
+			if err := config.DB.Where("id = ?", item.ProductID).First(&productCopy).Error; err == nil {
+				if itemWeight <= 0 { itemWeight = productCopy.Weight }
+				if itemLength <= 0 { itemLength = productCopy.Length }
+				if itemWidth <= 0 { itemWidth = productCopy.Width }
+				if itemHeight <= 0 { itemHeight = productCopy.Height }
 			}
 		}
 
@@ -150,8 +260,20 @@ func CreateOrder(c *gin.Context) {
 		if itemWidth <= 0 { itemWidth = 1 }
 		if itemHeight <= 0 { itemHeight = 1 }
 
+		itemKey := item.ProductID
+		if item.VariantID != nil {
+			itemKey = fmt.Sprintf("%s-%d", item.ProductID, *item.VariantID)
+		}
+		var warehouseIDVal *uint
+		if id, ok := itemPrimaryWarehouse[itemKey]; ok {
+			copyID := id
+			warehouseIDVal = &copyID
+		}
+
 		orderItems = append(orderItems, models.OrderItem{
 			ProductID: item.ProductID,
+			VariantID: item.VariantID,
+			WarehouseID: warehouseIDVal,
 			Name:      item.Name,
 			Qty:       item.Qty,
 			Price:     item.Price,
@@ -177,11 +299,26 @@ func CreateOrder(c *gin.Context) {
 			return
 		}
 	} else if input.ShippingMethod == "Kurir Toko Sinar Abadi" {
-		if !strings.Contains(strings.ToLower(input.Address), "malang") {
-			tx.Rollback()
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Pengiriman Kurir Toko Sinar Abadi hanya berlaku untuk area Malang"})
-			return
+		// Lookup shipping cost from delivery location
+		if input.DeliveryLocationID != nil {
+			cost, err := services.LookupDeliveryLocationCost(*input.DeliveryLocationID)
+			if err != nil {
+				tx.Rollback()
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			shippingCost = cost
+		} else {
+			// Fallback: use the cost provided by frontend
+			shippingCost = input.ShippingCost
 		}
+	}
+
+	paymentMethodStr := input.PaymentMethod
+	if strings.HasPrefix(paymentMethodStr, "midtrans_") {
+		paymentMethodStr = "Midtrans (" + strings.TrimPrefix(paymentMethodStr, "midtrans_") + ")"
+	} else if paymentMethodStr == "midtrans" {
+		paymentMethodStr = "Midtrans"
 	}
 
 	order := models.Order{
@@ -215,6 +352,8 @@ func CreateOrder(c *gin.Context) {
 		BiteshipAreaID:     input.BiteshipAreaID,
 		CourierCode:        input.CourierCode,
 		CourierServiceCode: input.CourierServiceCode,
+		DeliveryLocationID: input.DeliveryLocationID,
+		DeliveryStatus:     "Menunggu",
 	}
 
 	if result := tx.Create(&shipping); result.Error != nil {
@@ -273,7 +412,7 @@ func CreateOrder(c *gin.Context) {
 
 	payment := models.Payment{
 		OrderID:       orderID,
-		PaymentMethod: input.PaymentMethod,
+		PaymentMethod: paymentMethodStr,
 		AmountPaid:    order.Total,
 		PaymentStatus: "Pending",
 		SnapToken:     payResult.SnapToken,
@@ -405,17 +544,40 @@ func UpdateOrderStatus(c *gin.Context) {
 			if err := config.DB.Where("id = ?", item.ProductID).First(&product).Error; err == nil {
 				config.DB.Model(&product).Update("sold", product.Sold-item.Qty)
 			}
+			
+			// Return to warehouse stock
+			var whStock models.WarehouseStock
+			if item.WarehouseID != nil {
+				query := config.DB.Where("product_id = ? AND warehouse_id = ?", item.ProductID, *item.WarehouseID)
+				if item.VariantID != nil {
+					query = query.Where("variant_id = ?", *item.VariantID)
+				} else {
+					query = query.Where("variant_id IS NULL")
+				}
+				if err := query.First(&whStock).Error; err == nil {
+					config.DB.Model(&whStock).Update("stock", whStock.Stock+item.Qty)
+				}
+			}
+
 			var currentStock int
-			config.DB.Model(&models.StockLog{}).
-				Where("product_id = ?", item.ProductID).
-				Select("COALESCE(SUM(qty_changed), 0)").
-				Scan(&currentStock)
+			if whStock.ID != 0 {
+				currentStock = whStock.Stock + item.Qty
+			} else {
+				// Fallback to global stock check if warehouse stock not found
+				config.DB.Model(&models.StockLog{}).
+					Where("product_id = ?", item.ProductID).
+					Select("COALESCE(SUM(qty_changed), 0)").
+					Scan(&currentStock)
+				currentStock += item.Qty
+			}
 			
 			config.DB.Create(&models.StockLog{
 				ProductID:   item.ProductID,
+				VariantID:   item.VariantID,
+				WarehouseID: item.WarehouseID,
 				ChangeType:  "addition",
 				QtyChanged:  item.Qty,
-				FinalStock:  currentStock + item.Qty,
+				FinalStock:  currentStock,
 				Description: fmt.Sprintf("Pembatalan Pesanan (Order %s)", order.ID),
 			})
 		}
@@ -456,15 +618,42 @@ func UploadProof(c *gin.Context) {
 		return
 	}
 
-	var input ProofUploadInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	var proofUrl string
+	contentType := c.GetHeader("Content-Type")
+
+	if strings.Contains(contentType, "multipart/form-data") {
+		file, err := c.FormFile("proof")
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Gagal membaca file bukti pembayaran"})
+			return
+		}
+
+		if err := os.MkdirAll("uploads/proofs", 0755); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat direktori upload"})
+			return
+		}
+
+		filename := fmt.Sprintf("%s-%d.jpg", orderID, time.Now().Unix())
+		filepath := fmt.Sprintf("uploads/proofs/%s", filename)
+		if err := c.SaveUploadedFile(file, filepath); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan file"})
+			return
+		}
+		
+		// The API serves ./uploads via /images
+		proofUrl = fmt.Sprintf("/images/proofs/%s", filename)
+	} else {
+		var input ProofUploadInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		proofUrl = input.ProofUrl
 	}
 
 	config.DB.Model(&order).Updates(map[string]interface{}{
 		"proof_uploaded": true,
-		"proof_url":      input.ProofUrl,
+		"proof_url":      proofUrl,
 	})
 
 	c.JSON(http.StatusOK, gin.H{
@@ -495,9 +684,9 @@ func CompleteOrderCustomer(c *gin.Context) {
 		return
 	}
 
-	config.DB.Model(&order).Update("status", "COMPLETED")
+	config.DB.Model(&order).Update("status", "completed")
 
-	c.JSON(http.StatusOK, gin.H{"message": "Webhook processed"})
+	c.JSON(http.StatusOK, gin.H{"message": "Pesanan berhasil diselesaikan"})
 }
 
 // CancelOrderCustomer allows a customer to cancel their own pending order.
@@ -530,17 +719,40 @@ func CancelOrderCustomer(c *gin.Context) {
 		if err := config.DB.Where("id = ?", item.ProductID).First(&product).Error; err == nil {
 			config.DB.Model(&product).Update("sold", product.Sold-item.Qty)
 		}
+
+		// Return to warehouse stock
+		var whStock models.WarehouseStock
+		if item.WarehouseID != nil {
+			query := config.DB.Where("product_id = ? AND warehouse_id = ?", item.ProductID, *item.WarehouseID)
+			if item.VariantID != nil {
+				query = query.Where("variant_id = ?", *item.VariantID)
+			} else {
+				query = query.Where("variant_id IS NULL")
+			}
+			if err := query.First(&whStock).Error; err == nil {
+				config.DB.Model(&whStock).Update("stock", whStock.Stock+item.Qty)
+			}
+		}
+
 		var currentStock int
-		config.DB.Model(&models.StockLog{}).
-			Where("product_id = ?", item.ProductID).
-			Select("COALESCE(SUM(qty_changed), 0)").
-			Scan(&currentStock)
+		if whStock.ID != 0 {
+			currentStock = whStock.Stock + item.Qty
+		} else {
+			// Fallback to global stock check if warehouse stock not found
+			config.DB.Model(&models.StockLog{}).
+				Where("product_id = ?", item.ProductID).
+				Select("COALESCE(SUM(qty_changed), 0)").
+				Scan(&currentStock)
+			currentStock += item.Qty
+		}
 
 		config.DB.Create(&models.StockLog{
 			ProductID:   item.ProductID,
+			VariantID:   item.VariantID,
+			WarehouseID: item.WarehouseID,
 			ChangeType:  "addition",
 			QtyChanged:  item.Qty,
-			FinalStock:  currentStock + item.Qty,
+			FinalStock:  currentStock,
 			Description: fmt.Sprintf("Pembatalan oleh Customer (Order %s)", order.ID),
 		})
 	}
@@ -732,17 +944,39 @@ func MidtransWebhook(c *gin.Context) {
 				if err := config.DB.Where("id = ?", item.ProductID).First(&product).Error; err == nil {
 					config.DB.Model(&product).Update("sold", product.Sold+item.Qty)
 				}
+				
+				// Deduct from warehouse stock
+				var whStock models.WarehouseStock
+				if item.WarehouseID != nil {
+					query := config.DB.Where("product_id = ? AND warehouse_id = ?", item.ProductID, *item.WarehouseID)
+					if item.VariantID != nil {
+						query = query.Where("variant_id = ?", *item.VariantID)
+					} else {
+						query = query.Where("variant_id IS NULL")
+					}
+					if err := query.First(&whStock).Error; err == nil {
+						config.DB.Model(&whStock).Update("stock", whStock.Stock-item.Qty)
+					}
+				}
+
 				var currentStock int
-				config.DB.Model(&models.StockLog{}).
-					Where("product_id = ?", item.ProductID).
-					Select("COALESCE(SUM(qty_changed), 0)").
-					Scan(&currentStock)
+				if whStock.ID != 0 {
+					currentStock = whStock.Stock - item.Qty
+				} else {
+					config.DB.Model(&models.StockLog{}).
+						Where("product_id = ?", item.ProductID).
+						Select("COALESCE(SUM(qty_changed), 0)").
+						Scan(&currentStock)
+					currentStock -= item.Qty
+				}
 
 				config.DB.Create(&models.StockLog{
 					ProductID:   item.ProductID,
+					VariantID:   item.VariantID,
+					WarehouseID: item.WarehouseID,
 					ChangeType:  "deduction",
 					QtyChanged:  -item.Qty,
-					FinalStock:  currentStock - item.Qty,
+					FinalStock:  currentStock,
 					Description: fmt.Sprintf("Reaktivasi Pembayaran Midtrans (Order %s)", orderID),
 				})
 			}

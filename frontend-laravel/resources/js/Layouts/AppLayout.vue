@@ -130,6 +130,16 @@ const handleLogout = () => {
             <slot />
         </main>
 
+        <!-- Chatbot Floating Button -->
+        <div v-if="auth.role !== 'admin' && auth.role !== 'owner'" class="chatbot-fab-container" style="position: fixed; bottom: 30px; right: 30px; z-index: 50; display: flex; align-items: center;">
+            <div class="chatbot-tooltip" style="margin-right: 16px; background: white; color: #0f172a; padding: 10px 16px; border-radius: 12px; font-size: 14px; font-weight: 600; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; white-space: nowrap; pointer-events: none; opacity: 0; transform: translateX(10px); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);">Tanya AI untuk rekomendasi bahan bangunan</div>
+            <Link :href="auth.token ? '/customer/dashboard?menu=chatbot' : '/login'" class="chatbot-fab" style="display: flex; align-items: center; justify-content: center; width: 60px; height: 60px; background: #e11d48; color: white; border-radius: 50%; box-shadow: 0 4px 12px rgba(225, 29, 72, 0.4); text-decoration: none; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1); position: relative; z-index: 2;">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+            </Link>
+        </div>
+
         <!-- Footer -->
         <footer class="footer">
             <div class="container">
@@ -204,3 +214,13 @@ const handleLogout = () => {
         </footer>
     </div>
 </template>
+
+<style scoped>
+.chatbot-fab-container:hover .chatbot-tooltip {
+    opacity: 1 !important;
+    transform: translateX(0) !important;
+}
+.chatbot-fab-container:hover .chatbot-fab {
+    transform: scale(1.1) !important;
+}
+</style>

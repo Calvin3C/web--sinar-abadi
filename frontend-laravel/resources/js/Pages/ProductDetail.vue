@@ -100,6 +100,14 @@ const formatPrice = (price) => {
     }).format(price).replace('Rp', 'Rp ');
 };
 
+const getVariantId = () => {
+    if (props.product.variants && props.product.variants.length > 0) {
+        const variant = props.product.variants.find(v => v.name === selectedColor.value);
+        if (variant) return variant.id;
+    }
+    return null;
+};
+
 const handleAddToCart = () => {
     if (auth.value.role !== 'customer') {
         router.visit('/login');
@@ -111,7 +119,6 @@ const handleAddToCart = () => {
         name: props.product.name,
         price: displayPrice.value,
         img: props.product.img || '',
-        isLarge: props.product.isLarge || false,
         weight: props.product.weight || 0,
         length: props.product.length || 1,
         width: props.product.width || 1,
@@ -120,6 +127,7 @@ const handleAddToCart = () => {
         qty: quantity.value,
         minPurchase: minPurchase,
         color: selectedColor.value,
+        variantId: getVariantId(),
     }, {
         preserveScroll: true
     });
@@ -155,7 +163,7 @@ const getWeight = () => {
         const gramStr = new Intl.NumberFormat('id-ID').format(weightKg * 1000);
         return `${gramStr} Gram / ${weightKg} Kg`;
     }
-    return props.product.isLarge ? '15.000 Gram / 15 Kg' : '2.000 Gram / 2 Kg';
+    return '2.000 Gram / 2 Kg';
 };
 
 const getWaLink = () => {

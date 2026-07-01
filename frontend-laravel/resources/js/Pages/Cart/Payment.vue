@@ -42,9 +42,17 @@ const storeAddress = {
 const selectedAddress = ref(mockAddresses.value.length > 0 ? mockAddresses.value[0] : storeAddress);
 
 const selectedBank = ref(props.bankAccounts[0]?.name || 'Mandiri');
-const selectedPaymentMethod = ref('midtrans'); // 'midtrans' or 'manual'
+const selectedPaymentMethod = ref('midtrans_gopay'); // specific midtrans method or 'manual'
 const isProcessingMidtrans = ref(false);
 const midtransError = ref('');
+
+const midtransMethods = [
+    { id: 'midtrans_gopay', name: 'GoPay/QRIS', badge: 'E-Wallet / Instan' },
+    { id: 'midtrans_bca_va', name: 'BCA Virtual Account', badge: 'Otomatis' },
+    { id: 'midtrans_echannel', name: 'Mandiri Virtual Account', badge: 'Otomatis' },
+    { id: 'midtrans_bni_va', name: 'BNI Virtual Account', badge: 'Otomatis' },
+    { id: 'midtrans_bri_va', name: 'BRI Virtual Account', badge: 'Otomatis' },
+];
 
 const checkoutForm = useForm({
     bank: selectedBank.value,
@@ -56,8 +64,53 @@ const checkoutForm = useForm({
     shipping_cost: 0,
     courier_code: '',
     courier_service_code: '',
-    payment_type: 'midtrans',
+    delivery_location_id: null,
+    payment_type: 'midtrans_gopay',
 });
+
+// Delivery locations for Kurir Toko Sinar Abadi
+const deliveryLocations = ref([]);
+const selectedDeliveryLocation = ref(null);
+const isFetchingLocations = ref(false);
+
+const fetchDeliveryLocations = async () => {
+    isFetchingLocations.value = true;
+    try {
+        const res = await fetch('http://localhost:8080/api/delivery/locations');
+        if (res.ok) {
+            deliveryLocations.value = await res.json();
+            if (activeTab.value === 'kurir') {
+                checkDeliveryLocationMatch();
+            }
+        }
+    } catch (e) {
+        console.error('Failed to fetch delivery locations', e);
+    } finally {
+        isFetchingLocations.value = false;
+    }
+};
+
+const checkDeliveryLocationMatch = () => {
+    if (!selectedAddress.value || selectedAddress.value.id === 99 || !deliveryLocations.value.length) return;
+    
+    const fullAddress = `${selectedAddress.value.address} ${selectedAddress.value.kota || ''}`.toLowerCase();
+    
+    // Match intelligently, ignoring "Desa" prefixes
+    const match = deliveryLocations.value.find(loc => {
+        let locName = loc.name.toLowerCase().replace(/^desa\s+/, '');
+        return fullAddress.includes(locName);
+    });
+    
+    if (match) {
+        selectedDeliveryLocation.value = match;
+        checkoutForm.delivery_location_id = match.id;
+        checkoutForm.shipping_cost = match.shippingCost;
+    } else {
+        selectedDeliveryLocation.value = null;
+        checkoutForm.delivery_location_id = null;
+        checkoutForm.shipping_cost = 0;
+    }
+};
 
 const isDragging = ref(false);
 const proofPreview = ref(null);
@@ -127,7 +180,7 @@ const fetchRates = async (addr) => {
                 name: item.name,
                 value: item.price,
                 quantity: item.qty,
-                weight: item.weight && item.weight > 0 ? item.weight : (item.isLarge ? 15000 : 2000),
+                weight: item.weight && item.weight > 0 ? item.weight : 2000,
                 length: item.length && item.length > 0 ? item.length : 1,
                 width: item.width && item.width > 0 ? item.width : 1,
                 height: item.height && item.height > 0 ? item.height : 1
@@ -167,11 +220,16 @@ const selectAddress = async (addr) => {
     if (addr.id === 99) {
         checkoutForm.courier = 'Ambil Di Toko';
         selectedRate.value = null;
+        selectedDeliveryLocation.value = null;
+        checkoutForm.delivery_location_id = null;
     } else if (activeTab.value === 'kurir') {
         checkoutForm.courier = 'Kurir Toko Sinar Abadi';
         selectedRate.value = null;
+        checkDeliveryLocationMatch();
     } else {
         checkoutForm.courier = ''; // Will be set when user picks a rate
+        selectedDeliveryLocation.value = null;
+        checkoutForm.delivery_location_id = null;
         await fetchRates(addr);
     }
 };
@@ -201,6 +259,8 @@ onMounted(() => {
         checkoutForm.biteship_area_id = selectedAddress.value.biteshipAreaId || '';
         fetchRates(selectedAddress.value);
     }
+    // Prefetch delivery locations for Kurir Toko tab
+    fetchDeliveryLocations();
 });
 
 // Edit form
@@ -221,9 +281,15 @@ const addressForm = useForm({
 const areaSearchQuery = ref('');
 const isSearchingArea = ref(false);
 const areaSearchResults = ref([]);
+const isSelectingArea = ref(false);
 
 let searchTimeout;
 watch(areaSearchQuery, (newVal) => {
+    if (isSelectingArea.value) {
+        isSelectingArea.value = false;
+        return;
+    }
+
     if (!newVal || newVal.length < 3) {
         areaSearchResults.value = [];
         return;
@@ -251,6 +317,8 @@ const selectArea = (area) => {
     addressForm.biteshipAreaId = area.id;
     addressForm.kota = area.name;
     addressForm.postalCode = area.postal_code || '';
+    
+    isSelectingArea.value = true;
     areaSearchQuery.value = `${area.name}, ${area.administrative_division_level_2_name}, ${area.administrative_division_level_1_name} ${area.postal_code}`;
     areaSearchResults.value = [];
 };
@@ -357,8 +425,11 @@ const currentShippingCost = computed(() => {
     if (activeTab.value === 'semua' && selectedRate.value) {
         return selectedRate.value.price;
     }
-    if (activeTab.value === 'ambil' || activeTab.value === 'kurir') {
-        return 0; // Or define Kurir Toko pricing logic
+    if (activeTab.value === 'kurir' && selectedDeliveryLocation.value) {
+        return selectedDeliveryLocation.value.shippingCost;
+    }
+    if (activeTab.value === 'ambil') {
+        return 0;
     }
     return props.logistic.cost || 0;
 });
@@ -369,24 +440,17 @@ const grandTotal = computed(() => {
 
 const isCheckoutDisabled = computed(() => {
     const courierNotReady = activeTab.value === 'semua' && !selectedRate.value;
-    const malangCheck = checkoutForm.courier === 'Kurir Toko Sinar Abadi' && !checkoutForm.address.toLowerCase().includes('malang');
+    const kurirNoLocation = activeTab.value === 'kurir' && !selectedDeliveryLocation.value;
     const processing = checkoutForm.processing || isProcessingMidtrans.value;
     
-    if (selectedPaymentMethod.value === 'midtrans') {
-        return processing || courierNotReady || malangCheck;
+    if (selectedPaymentMethod.value.startsWith('midtrans')) {
+        return processing || courierNotReady || kurirNoLocation;
     }
     // Manual: also need proof
-    return processing || !checkoutForm.proof || courierNotReady || malangCheck;
+    return processing || !checkoutForm.proof || courierNotReady || kurirNoLocation;
 });
 
 const handleCheckout = async () => {
-    if (checkoutForm.courier === 'Kurir Toko Sinar Abadi') {
-        if (!checkoutForm.address.toLowerCase().includes('malang')) {
-            alert('Pengiriman Kurir Toko Sinar Abadi hanya berlaku untuk area Malang. Silakan gunakan metode pengiriman lain atau ubah alamat Anda.');
-            return;
-        }
-    }
-
     if (!confirm('Pastikan alamat pengiriman sudah benar dan kurir pengiriman sudah sesuai.')) {
         return;
     }
@@ -396,14 +460,14 @@ const handleCheckout = async () => {
     checkoutForm.payment_type = selectedPaymentMethod.value;
 
     // === MIDTRANS FLOW ===
-    if (selectedPaymentMethod.value === 'midtrans') {
+    if (selectedPaymentMethod.value.startsWith('midtrans')) {
         isProcessingMidtrans.value = true;
         midtransError.value = '';
         
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
             const formData = new FormData();
-            formData.append('payment_type', 'midtrans');
+            formData.append('payment_type', selectedPaymentMethod.value);
             formData.append('address', checkoutForm.address);
             formData.append('phone', checkoutForm.phone);
             formData.append('courier', checkoutForm.courier);
@@ -411,6 +475,9 @@ const handleCheckout = async () => {
             formData.append('shipping_cost', checkoutForm.shipping_cost);
             formData.append('courier_code', checkoutForm.courier_code);
             formData.append('courier_service_code', checkoutForm.courier_service_code);
+            if (checkoutForm.delivery_location_id) {
+                formData.append('delivery_location_id', checkoutForm.delivery_location_id);
+            }
 
             const response = await fetch('/checkout', {
                 method: 'POST',
@@ -588,9 +655,44 @@ const handleCheckout = async () => {
                             </template>
                             <template v-else-if="checkoutForm.courier === 'Kurir Toko Sinar Abadi'">
                                 <div style="font-weight: 700; font-size: 14px; color: #0f172a;">Kurir Toko Sinar Abadi</div>
-                                <div style="font-size: 13px; color: #64748b; margin-top: 4px;">Dikirim oleh armada toko kami.</div>
-                                <div v-if="!checkoutForm.address.toLowerCase().includes('malang')" style="font-size: 13px; color: #dc2626; margin-top: 8px; font-weight: 600;">
-                                    * Metode pengiriman ini hanya tersedia untuk area Malang (Kota/Kabupaten).
+                                <div style="font-size: 13px; color: #64748b; margin-top: 4px;">Dikirim oleh armada toko kami ke desa tujuan.</div>
+                                
+                                <div style="margin-top: 16px;">
+                                    <div v-if="isFetchingLocations" style="font-size: 13px; color: #64748b; padding: 12px; text-align: center;">
+                                        Memuat data lokasi...
+                                    </div>
+                                    <div v-else-if="selectedDeliveryLocation" style="padding: 10px 14px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px;">
+                                        <div style="font-size: 12px; color: #166534; font-weight: 600;">Tujuan dikenali: <strong>{{ selectedDeliveryLocation.name }}</strong></div>
+                                        <div style="font-size: 13px; color: #166534; font-weight: 800; margin-top: 2px;">
+                                            Ongkir: {{ selectedDeliveryLocation.shippingCost === 0 ? 'GRATIS' : formatPrice(selectedDeliveryLocation.shippingCost) }}
+                                        </div>
+                                    </div>
+                                    <div v-else style="padding: 10px 14px; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px;">
+                                        <div style="font-size: 13px; color: #dc2626; font-weight: 600;">
+                                            Untuk lokasi Anda saat ini belum bisa dikirim oleh kurir sinar abadi, mohon pilih metode pengiriman yang lain.
+                                        </div>
+                                    </div>
+
+                                    <!-- Supported Delivery Areas Info -->
+                                    <div style="margin-top: 12px; font-size: 12px; color: #64748b; background: #f8fafc; padding: 10px 14px; border: 1px dashed #cbd5e1; border-radius: 6px;">
+                                        <strong style="color: #475569; display: block; margin-bottom: 8px;">Area Jangkauan Kurir Toko:</strong>
+                                        <ol style="margin: 0; padding-left: 24px; line-height: 1.6; column-count: 2; column-gap: 24px; list-style-type: decimal;">
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Dampit (Jambangan, Ngelak, Rembun)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Tirtoyudo (Kepatihan, Pujiharjo, Lenggoksono)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Wonoagung (Wonokitri)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Tamansari (Blubuk)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Kebonagung (Karangsono)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Gedangan (Sumber Gesing)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Srimulyo (Sumber Arum)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Ampelgading (Sono Wangi, Sono Sekar)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Sumbermanjing Wetan (Tambak Asri, Sido Asri)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Pamotan (Sumber Ayu)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Majangtengah (Lambang Kuning)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Sumberputih (Lambang Sari)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Wajak (Sumber Putih)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Turen (Kedok, Turen Pusat)</li>
+                                        </ol>
+                                    </div>
                                 </div>
                             </template>
                             <template v-else>
@@ -628,46 +730,31 @@ const handleCheckout = async () => {
                                 Silahkan pilih metode pembayaran yang Anda inginkan:
                             </p>
 
-                            <!-- Option 1: Midtrans Online Payment -->
+                            <!-- Midtrans Payment Options -->
                             <div 
+                                v-for="method in midtransMethods" 
+                                :key="method.id" 
                                 class="order-card mb-3"
-                                :style="selectedPaymentMethod === 'midtrans' ? { borderColor: '#0ea5e9', background: '#f0f9ff' } : { cursor: 'pointer' }"
-                                @click="selectedPaymentMethod = 'midtrans'"
+                                :style="selectedPaymentMethod === method.id ? { borderColor: '#0ea5e9', background: '#f0f9ff' } : { cursor: 'pointer' }"
+                                @click="selectedPaymentMethod = method.id"
                             >
                                 <div class="d-flex align-center gap-3">
                                     <div 
                                         style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid #cbd5e1; display: flex; align-items: center; justify-content: center; background: white;"
-                                        :style="selectedPaymentMethod === 'midtrans' ? { borderColor: '#0ea5e9' } : {}"
+                                        :style="selectedPaymentMethod === method.id ? { borderColor: '#0ea5e9' } : {}"
                                     >
                                         <div 
-                                            v-if="selectedPaymentMethod === 'midtrans'"
+                                            v-if="selectedPaymentMethod === method.id"
                                             style="width: 10px; height: 10px; border-radius: 50%; background: #0ea5e9;"
                                         ></div>
                                     </div>
                                     <div style="flex: 1;">
                                         <span style="font-size: 14px; font-weight: 600; color: #1e293b;">
-                                            Bayar Online (Midtrans)
+                                            {{ method.name }}
                                         </span>
                                         <span style="font-size: 11px; font-weight: 700; color: white; background: linear-gradient(135deg, #0ea5e9, #6366f1); padding: 2px 8px; border-radius: 4px; margin-left: 8px;">
-                                            OTOMATIS
+                                            {{ method.badge }}
                                         </span>
-                                    </div>
-                                </div>
-
-                                <div v-if="selectedPaymentMethod === 'midtrans'" style="margin-top: 16px; margin-left: 31px; background: white; padding: 16px; border-radius: 6px; border: 1px solid #e0f2fe;">
-                                    <div style="font-size: 13px; color: #334155; line-height: 1.6;">
-                                        <div class="d-flex align-center gap-2 mb-2">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                            <span>Verifikasi pembayaran <b>otomatis</b></span>
-                                        </div>
-                                        <div class="d-flex align-center gap-2 mb-2">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                            <span>Tersedia: Virtual Account, GoPay, QRIS, Kartu Kredit, dll.</span>
-                                        </div>
-                                        <div class="d-flex align-center gap-2">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                                            <span>Tidak perlu upload bukti transfer</span>
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -776,13 +863,13 @@ const handleCheckout = async () => {
                                     type="submit" 
                                     class="btn w-100" 
                                     :style="[
-                                        { background: selectedPaymentMethod === 'midtrans' ? 'linear-gradient(135deg, #0ea5e9, #6366f1)' : '#0f172a', color: 'white', fontSize: '14px', padding: '16px', fontWeight: '700', borderRadius: '6px', border: 'none', cursor: 'pointer', transition: 'all 0.3s ease' },
+                                        { background: selectedPaymentMethod.startsWith('midtrans') ? 'linear-gradient(135deg, #0ea5e9, #6366f1)' : '#0f172a', color: 'white', fontSize: '14px', padding: '16px', fontWeight: '700', borderRadius: '6px', border: 'none', cursor: 'pointer', transition: 'all 0.3s ease' },
                                         isCheckoutDisabled ? { opacity: 0.5, cursor: 'not-allowed' } : {}
                                     ]"
                                     :disabled="isCheckoutDisabled"
                                 >
                                     <span v-if="checkoutForm.processing || isProcessingMidtrans">MEMPROSES PESANAN...</span>
-                                    <span v-else-if="selectedPaymentMethod === 'midtrans'">&#x1F512; BAYAR DENGAN MIDTRANS</span>
+                                    <span v-else-if="selectedPaymentMethod.startsWith('midtrans')">&#x1F512; BAYAR OTOMATIS</span>
                                     <span v-else>BAYAR SEKARANG</span>
                                 </button>
                             </form>
@@ -805,7 +892,18 @@ const handleCheckout = async () => {
                             </div>
                             <div class="d-flex justify-between align-center mb-4" style="font-size: 14px; color: #64748b;">
                                 <span>Ongkos Kirim</span>
-                                <span style="color: #0f172a; font-weight: 500;">{{ currentShippingCost > 0 ? formatPrice(currentShippingCost) : 'Gratis' }}</span>
+                                <span style="color: #0f172a; font-weight: 500;">
+                                    <template v-if="checkoutForm.courier === 'Kurir Toko Sinar Abadi'">
+                                        <template v-if="selectedDeliveryLocation">
+                                            <span v-if="selectedDeliveryLocation.shippingCost === 0" style="color: #059669; font-weight: 700;">Gratis</span>
+                                            <span v-else>{{ formatPrice(selectedDeliveryLocation.shippingCost) }}</span>
+                                        </template>
+                                        <span v-else style="color: #dc2626; font-style: italic; font-size: 13px;">(tujuan tidak terjangkau)</span>
+                                    </template>
+                                    <template v-else>
+                                        {{ currentShippingCost > 0 ? formatPrice(currentShippingCost) : 'Gratis' }}
+                                    </template>
+                                </span>
                             </div>
 
                             <div style="border-top: 1px solid #e2e8f0; padding-top: 16px;" class="d-flex justify-between align-center">

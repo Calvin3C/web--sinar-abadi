@@ -46,7 +46,6 @@ class CartController extends Controller
             'name'    => 'required|string',
             'price'   => 'required|numeric',
             'img'     => 'nullable|string',
-            'isLarge' => 'nullable',
             'weight'  => 'nullable|numeric',
             'length'  => 'nullable|numeric',
             'width'   => 'nullable|numeric',
@@ -54,12 +53,11 @@ class CartController extends Controller
             'qty'     => 'nullable|numeric|min:1',
             'minPurchase' => 'nullable|numeric|min:1',
             'color'   => 'nullable|string',
+            'variantId' => 'nullable|integer',
         ]);
 
         $cart = session('cart', []);
         $productId = $request->input('id');
-        $isLarge = in_array($request->input('isLarge'), ['1', 'true', true, 1], true)
-                || $request->input('isLarge') === true;
         
         $requestedQty = (int) $request->input('qty', 1);
         $color = $request->input('color');
@@ -80,7 +78,6 @@ class CartController extends Controller
                 'name'    => $request->input('name'),
                 'price'   => (int) $request->input('price'),
                 'img'     => $request->input('img', ''),
-                'isLarge' => $isLarge,
                 'weight'  => (int) $request->input('weight', 0),
                 'length'  => (int) $request->input('length', 1),
                 'width'   => (int) $request->input('width', 1),
@@ -89,6 +86,7 @@ class CartController extends Controller
                 'qty'     => $requestedQty,
                 'minPurchase' => (int) $request->input('minPurchase', 1),
                 'color'   => $color,
+                'variantId' => $request->input('variantId'),
             ];
         }
 
@@ -164,7 +162,6 @@ class CartController extends Controller
 
         $cart = session('cart', []);
         $totalQty = collect($cart)->sum('qty');
-        $hasLargeItem = collect($cart)->some(fn($item) => $item['isLarge'] === true);
 
         // Simple shipping rates calculation
         $baseRate = 15000;
@@ -175,14 +172,11 @@ class CartController extends Controller
         }
 
         $cost = $baseRate + ($totalQty * 4000);
-        if ($hasLargeItem) {
-            $cost += 50000; // Extra heavy charge
-        }
 
         // Mock total weight (each item approx 2kg, large items 15kg)
         $weight = 0;
         foreach ($cart as $item) {
-            $weight += $item['qty'] * ($item['isLarge'] ? 15 : 2);
+            $weight += $item['qty'] * ($item['weight'] > 0 ? $item['weight'] / 1000 : 2);
         }
 
         session([
@@ -213,7 +207,7 @@ class CartController extends Controller
                 'address' => '',
                 'phone' => '',
                 'cost' => 0,
-                'totalWeight' => collect($cart)->sum(fn($i) => $i['qty'] * ($i['isLarge'] ? 15 : 2)),
+                'totalWeight' => collect($cart)->sum(fn($i) => $i['qty'] * ($i['weight'] > 0 ? $i['weight'] / 1000 : 2)),
             ];
         }
 
@@ -252,7 +246,8 @@ class CartController extends Controller
             'shipping_cost' => 'nullable|numeric',
             'courier_code' => 'nullable|string',
             'courier_service_code' => 'nullable|string',
-            'payment_type' => 'required|string|in:midtrans,manual',
+            'delivery_location_id' => 'nullable|integer',
+            'payment_type' => 'required|string',
         ];
 
         if ($paymentType === 'manual') {
@@ -275,7 +270,7 @@ class CartController extends Controller
 
         $cart = session('cart', []);
         if (empty($cart)) {
-            if ($paymentType === 'midtrans') {
+            if (str_starts_with($paymentType, 'midtrans')) {
                 return response()->json(['error' => 'Keranjang kosong.'], 400);
             }
             return redirect()->route('cart.index')->with('error', 'Keranjang kosong.');
@@ -294,6 +289,9 @@ class CartController extends Controller
                 'height'    => $item['height'] ?? 1,
                 'color'     => $item['color'] ?? '',
             ];
+            if (isset($item['variantId']) && $item['variantId']) {
+                $items[count($items) - 1]['variantId'] = $item['variantId'];
+            }
         }
 
         $subtotal = collect($cart)->sum(fn($item) => $item['price'] * $item['qty']);
@@ -301,11 +299,11 @@ class CartController extends Controller
         $totalProduct = $subtotal + $tax;
 
         // Determine payment method label for backend
-        $paymentMethod = $paymentType === 'midtrans'
-            ? 'Midtrans Online'
+        $paymentMethod = str_starts_with($paymentType, 'midtrans')
+            ? $paymentType
             : 'Transfer Bank ' . $request->input('bank', 'BCA');
 
-        $result = $this->api->createOrder(session('auth_token'), [
+        $orderPayload = [
             'phone'              => $logistic['phone'],
             'address'            => $logistic['address'],
             'shippingMethod'     => $logistic['courier'],
@@ -316,11 +314,18 @@ class CartController extends Controller
             'courierServiceCode' => $request->input('courier_service_code', ''),
             'items'              => $items,
             'total'              => $totalProduct,
-        ]);
+        ];
+
+        // Add delivery location ID for Kurir Toko Sinar Abadi
+        if ($request->input('delivery_location_id')) {
+            $orderPayload['deliveryLocationId'] = (int) $request->input('delivery_location_id');
+        }
+
+        $result = $this->api->createOrder(session('auth_token'), $orderPayload);
 
         if (!$result['success']) {
             $error = $result['data']['error'] ?? 'Gagal membuat pesanan.';
-            if ($paymentType === 'midtrans') {
+            if (str_starts_with($paymentType, 'midtrans')) {
                 return response()->json(['error' => $error], 422);
             }
             return back()->withErrors(['bank' => $error]);
@@ -329,7 +334,7 @@ class CartController extends Controller
         $orderId = $result['data']['id'] ?? null;
 
         // === MIDTRANS FLOW ===
-        if ($paymentType === 'midtrans') {
+        if (str_starts_with($paymentType, 'midtrans')) {
             $snapToken = $result['data']['snapToken'] ?? null;
 
             if (!$snapToken) {
@@ -370,7 +375,6 @@ class CartController extends Controller
         if ($logistic && $logistic['address']) {
             $cart = session('cart', []);
             $totalQty = collect($cart)->sum('qty');
-            $hasLargeItem = collect($cart)->some(fn($item) => $item['isLarge'] === true);
 
             $baseRate = 15000;
             if ($logistic['courier'] === 'JNE') {
@@ -380,13 +384,10 @@ class CartController extends Controller
             }
 
             $cost = $baseRate + ($totalQty * 4000);
-            if ($hasLargeItem) {
-                $cost += 50000;
-            }
 
             $weight = 0;
             foreach ($cart as $item) {
-                $weight += $item['qty'] * ($item['isLarge'] ? 15 : 2);
+                $weight += $item['qty'] * ($item['weight'] > 0 ? $item['weight'] / 1000 : 2);
             }
 
             $logistic['cost'] = $cost;

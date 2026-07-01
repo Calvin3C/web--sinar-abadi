@@ -30,6 +30,14 @@ class AdminController extends Controller
         $customerResult = $this->api->getCustomers($token);
         $customers = $customerResult['success'] ? $customerResult['data'] : [];
 
+        // Fetch fleet status for Kurir Toko monitoring
+        $fleetResult = $this->api->getFleetStatus($token);
+        $fleet = $fleetResult['success'] ? $fleetResult['data'] : [];
+
+        // Fetch delivery locations for reference
+        $locationResult = $this->api->getDeliveryLocations();
+        $deliveryLocations = $locationResult['success'] ? $locationResult['data'] : [];
+
         // Calculate stats
         $pendingOrders = count(array_filter($orders, fn($o) => strtolower($o['status'] ?? '') === 'pending'));
         $verifiedOrders = count(array_filter($orders, fn($o) => strtolower($o['status'] ?? '') === 'verified'));
@@ -40,6 +48,8 @@ class AdminController extends Controller
         return Inertia::render('Admin/Dashboard', [
             'orders' => $orders,
             'customers' => $customers,
+            'fleet' => $fleet,
+            'deliveryLocations' => $deliveryLocations,
             'username' => session('auth_username', 'Admin'),
             'profile' => $profile,
             'stats' => [
@@ -67,6 +77,35 @@ class AdminController extends Controller
 
         if (!$result['success']) {
             return back()->with('error', 'Gagal memperbarui status pengiriman.');
+        }
+
+        return back()->with('success', 'Status pengiriman berhasil diperbarui.');
+    }
+
+    /**
+     * Update delivery status untuk pesanan Kurir Toko Sinar Abadi.
+     */
+    public function updateDeliveryStatus(Request $request, string $orderId)
+    {
+        $request->validate([
+            'deliveryStatus' => 'required|string|in:Menunggu,Diproses,Dikirim,Selesai',
+            'fleetVehicleId' => 'nullable|integer',
+        ]);
+
+        $token = session('auth_token');
+        $data = [
+            'deliveryStatus' => $request->input('deliveryStatus'),
+        ];
+
+        if ($request->input('fleetVehicleId')) {
+            $data['fleetVehicleId'] = (int) $request->input('fleetVehicleId');
+        }
+
+        $result = $this->api->updateDeliveryStatus($token, $orderId, $data);
+
+        if (!$result['success']) {
+            $error = $result['data']['error'] ?? 'Gagal memperbarui status pengiriman.';
+            return back()->with('error', $error);
         }
 
         return back()->with('success', 'Status pengiriman berhasil diperbarui.');
@@ -109,3 +148,4 @@ class AdminController extends Controller
         return back()->with('success', 'Profil berhasil diperbarui.');
     }
 }
+

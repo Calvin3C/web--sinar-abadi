@@ -9,8 +9,10 @@ import (
 )
 
 type VariantInput struct {
-	Name  string `json:"name" binding:"required"`
-	Price int64  `json:"price"`
+	Name        string `json:"name" binding:"required"`
+	Price       int64  `json:"price"`
+	Stock       int    `json:"stock"`
+	WarehouseID *uint  `json:"warehouseId"`
 }
 
 // CreateVariant handles creating a new variant for a product.
@@ -40,6 +42,47 @@ func CreateVariant(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan varian"})
 		return
 	}
+
+	if input.Stock > 0 {
+		var whID uint
+		if input.WarehouseID != nil && *input.WarehouseID > 0 {
+			whID = *input.WarehouseID
+		} else {
+			var firstWh models.Warehouse
+			config.DB.First(&firstWh)
+			whID = firstWh.ID
+		}
+
+		if whID > 0 {
+			ws := models.WarehouseStock{
+				ProductID:   productID,
+				VariantID:   &variant.ID,
+				WarehouseID: whID,
+				Stock:       input.Stock,
+			}
+			config.DB.Create(&ws)
+
+			ownerIDVal, _ := c.Get("userId")
+			var ownerIDPtr *uint
+			if ownerIDVal != nil {
+				id := ownerIDVal.(uint)
+				ownerIDPtr = &id
+			}
+			config.DB.Create(&models.StockLog{
+				ProductID:   productID,
+				VariantID:   &variant.ID,
+				WarehouseID: &whID,
+				OwnerID:     ownerIDPtr,
+				ChangeType:  "addition",
+				QtyChanged:  input.Stock,
+				FinalStock:  input.Stock,
+				Description: "Stok awal varian baru",
+			})
+		}
+	}
+
+	// Reload variant with warehouseStocks if needed, or just return variant
+	config.DB.Preload("WarehouseStocks").Where("id = ?", variant.ID).First(&variant)
 
 	c.JSON(http.StatusCreated, variant)
 }

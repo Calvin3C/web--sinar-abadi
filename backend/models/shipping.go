@@ -17,6 +17,12 @@ type Shipping struct {
 	CourierServiceCode string    `gorm:"size:50" json:"courierServiceCode"` // e.g. "reg", "best", "jtr", "gokil"
 	BiteshipOrderID    string    `gorm:"size:100" json:"biteshipOrderId"`
 	WaybillID          string    `gorm:"size:100" json:"waybillId"`
-	CreatedAt          time.Time `json:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt"`
+
+	// Kurir Toko Sinar Abadi specific fields
+	DeliveryLocationID *uint  `json:"deliveryLocationId"`                                         // FK to delivery_locations table
+	FleetVehicleID     *uint  `json:"fleetVehicleId"`                                             // FK to fleet_vehicles table (assigned vehicle)
+	DeliveryStatus     string `gorm:"size:30;not null;default:'Menunggu'" json:"deliveryStatus"` // Menunggu / Diproses / Dikirim / Selesai
+
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }

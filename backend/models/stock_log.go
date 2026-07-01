@@ -13,5 +13,7 @@ type StockLog struct {
 	QtyChanged  int       `gorm:"not null" json:"qtyChanged"`
 	FinalStock  int       `gorm:"not null" json:"finalStock"`
 	Description string    `gorm:"type:text" json:"description"`
+	WarehouseID *uint     `json:"warehouseId"`
+	VariantID   *uint     `json:"variantId"`
 	CreatedAt   time.Time `json:"createdAt"`
 }

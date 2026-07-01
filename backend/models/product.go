@@ -17,9 +17,9 @@ type Product struct {
 	MinPurchase int       `gorm:"default:1" json:"minPurchase"`   // Pembelian Minimal
 	Price       int64     `gorm:"not null" json:"price"`          // in Rupiah (integer, no floating point)
 	Sold        int       `gorm:"not null;default:0" json:"sold"` // popularity counter
-	IsLarge     bool      `gorm:"default:false" json:"isLarge"`   // true = heavy/bulky → shipping restriction
 	ImageURL    string           `gorm:"size:500" json:"img"`            // JSON key "img" matches frontend
 	Variants    []ProductVariant `gorm:"foreignKey:ProductID" json:"variants"`
+	WarehouseStocks []WarehouseStock `gorm:"foreignKey:ProductID" json:"warehouseStocks"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
@@ -40,9 +40,9 @@ type ProductResponse struct {
 	Price       int64     `json:"price"`
 	Stock       int       `json:"stock"` // computed from stock_logs
 	Sold        int       `json:"sold"`
-	IsLarge     bool      `json:"isLarge"`
 	ImageURL    string           `json:"img"`
 	Variants    []ProductVariant `json:"variants"`
+	WarehouseStocks []WarehouseStock `json:"warehouseStocks"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }

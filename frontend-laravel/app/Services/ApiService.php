@@ -94,12 +94,14 @@ class ApiService
     /**
      * Update product stock (owner only).
      */
-    public function updateStock(string $token, string $productId, int $amount): array
+    public function updateStock(string $token, string $productId, int $amount, ?int $warehouseId = null, ?int $variantId = null): array
     {
         $response = Http::timeout(10)
             ->withToken($token)
             ->put("{$this->baseUrl}/products/{$productId}/stock", [
                 'amount' => $amount,
+                'warehouseId' => $warehouseId,
+                'variantId' => $variantId,
             ]);
 
         return [
@@ -389,4 +391,144 @@ class ApiService
             'data'    => $response->json(),
         ];
     }
+
+    // =====================================================================
+    // WAREHOUSES & INBOUNDS
+    // =====================================================================
+
+    public function getWarehouses(string $token): array
+    {
+        $response = Http::timeout(10)
+            ->withToken($token)
+            ->get("{$this->baseUrl}/warehouses");
+
+        return [
+            'success' => $response->successful(),
+            'data'    => $response->json()['data'] ?? [],
+        ];
+    }
+
+    public function createWarehouse(string $token, array $data): array
+    {
+        $response = Http::timeout(10)
+            ->withToken($token)
+            ->post("{$this->baseUrl}/warehouses", $data);
+
+        return [
+            'success' => $response->successful(),
+            'data'    => $response->json(),
+        ];
+    }
+
+    public function updateWarehouse(string $token, string $id, array $data): array
+    {
+        $response = Http::timeout(10)
+            ->withToken($token)
+            ->put("{$this->baseUrl}/warehouses/{$id}", $data);
+
+        return $response->json() ?? ['success' => false, 'message' => 'API error'];
+    }
+
+    public function getStockTransfers(string $token): array
+    {
+        $response = Http::timeout(10)
+            ->withToken($token)
+            ->get("{$this->baseUrl}/stock-transfers");
+
+        return $response->json() ?? ['success' => false, 'message' => 'API error'];
+    }
+
+    public function transferStock(string $token, string $productId, array $data): array
+    {
+        $response = Http::timeout(10)
+            ->withToken($token)
+            ->post("{$this->baseUrl}/products/{$productId}/transfer", $data);
+
+        return $response->json() ?? ['success' => false, 'message' => 'API error'];
+    }
+
+    public function getInbounds(string $token): array
+    {
+        $response = Http::timeout(10)
+            ->withToken($token)
+            ->get("{$this->baseUrl}/inbounds");
+
+        return [
+            'success' => $response->successful(),
+            'data'    => $response->json()['data'] ?? [],
+        ];
+    }
+
+    public function createInbound(string $token, array $data): array
+    {
+        $response = Http::timeout(10)
+            ->withToken($token)
+            ->post("{$this->baseUrl}/inbounds", $data);
+
+        return [
+            'success' => $response->successful(),
+            'data'    => $response->json(),
+        ];
+    }
+
+    public function updateInboundStatus(string $token, string $id, array $data): array
+    {
+        $response = Http::timeout(10)
+            ->withToken($token)
+            ->put("{$this->baseUrl}/inbounds/{$id}/status", $data);
+
+        return [
+            'success' => $response->successful(),
+            'data'    => $response->json(),
+        ];
+    }
+
+    // =====================================================================
+    // DELIVERY (Kurir Toko Sinar Abadi)
+    // =====================================================================
+
+    /**
+     * Get delivery locations served by Kurir Toko Sinar Abadi.
+     */
+    public function getDeliveryLocations(): array
+    {
+        $response = Http::timeout(10)
+            ->get("{$this->baseUrl}/delivery/locations");
+
+        return [
+            'success' => $response->successful(),
+            'data'    => $response->json() ?? [],
+        ];
+    }
+
+    /**
+     * Get fleet vehicle status (admin/owner).
+     */
+    public function getFleetStatus(string $token): array
+    {
+        $response = Http::timeout(10)
+            ->withToken($token)
+            ->get("{$this->baseUrl}/delivery/fleet");
+
+        return [
+            'success' => $response->successful(),
+            'data'    => $response->json() ?? [],
+        ];
+    }
+
+    /**
+     * Update delivery status for a Kurir Toko order (admin/owner).
+     */
+    public function updateDeliveryStatus(string $token, string $orderId, array $data): array
+    {
+        $response = Http::timeout(10)
+            ->withToken($token)
+            ->put("{$this->baseUrl}/delivery/{$orderId}/status", $data);
+
+        return [
+            'success' => $response->successful(),
+            'data'    => $response->json(),
+        ];
+    }
 }
+

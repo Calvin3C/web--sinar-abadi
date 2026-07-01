@@ -29,6 +29,8 @@ type OrderItem struct {
 	ID        uint   `gorm:"primaryKey" json:"id"`
 	OrderID   string `gorm:"size:30;not null;index" json:"orderId"`
 	ProductID string `gorm:"size:20" json:"productId"`
+	VariantID *uint  `json:"variantId"`
+	WarehouseID *uint `json:"warehouseId"`
 	Name      string `gorm:"size:300;not null" json:"name"` // snapshot of product name at purchase time
 	Qty       int    `gorm:"not null" json:"qty"`
 	Price     int64  `gorm:"not null" json:"price"` // price per unit at time of purchase

@@ -1,7 +1,7 @@
 <script setup>
 import AppLayout from '@/Layouts/AppLayout.vue';
-import { useForm, Link } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { useForm, Link, router } from '@inertiajs/vue3';
+import { ref, reactive, computed } from 'vue';
 
 const props = defineProps({
     mode: {
@@ -19,6 +19,10 @@ const props = defineProps({
     username: {
         type: String,
         default: 'Owner',
+    },
+    warehouses: {
+        type: Array,
+        default: () => [],
     },
 });
 
@@ -39,7 +43,6 @@ const form = useForm({
     height: props.product?.height || 1,
     unit: props.product?.unit || '',
     minPurchase: props.product?.minPurchase || 1,
-    isLarge: props.product?.isLarge || false,
     img: props.product?.img || '',
     photo_main: null,
     photo_1: null,
@@ -98,6 +101,67 @@ const uniqueCategories = computed(() => {
     const cats = [...new Set(props.categories)];
     return cats;
 });
+
+const warehouseStockDescription = computed(() => {
+    if (!isEdit.value || !props.product?.warehouseStocks) return '';
+    // Use the same logic as Dashboard.vue: non-variant stocks
+    const nonVariantStocks = props.product.warehouseStocks.filter(ws => !ws.variantId);
+    if (nonVariantStocks.length === 0) return '';
+
+    const parts = [];
+    nonVariantStocks.forEach(ws => {
+        const w = props.warehouses.find(wh => wh.id === ws.warehouseId);
+        if (w) {
+            const stockDisplay = ws.stock > 0 ? ws.stock : '-';
+            parts.push({ name: w.name, stock: stockDisplay, whId: w.id });
+        }
+    });
+    return parts;
+});
+
+// Transfer Stok State
+const isTransferModalOpen = ref(false);
+const transferForm = reactive({
+    fromWarehouseId: '',
+    toWarehouseId: '',
+    quantity: 1,
+    variantId: '',
+});
+const isTransferring = ref(false);
+
+const openTransferModal = () => {
+    transferForm.fromWarehouseId = '';
+    transferForm.toWarehouseId = '';
+    transferForm.quantity = 1;
+    transferForm.variantId = '';
+    isTransferModalOpen.value = true;
+};
+
+const closeTransferModal = () => {
+    isTransferModalOpen.value = false;
+};
+
+const submitTransfer = () => {
+    if (!transferForm.fromWarehouseId || !transferForm.toWarehouseId || transferForm.quantity <= 0) {
+        alert('Mohon lengkapi data transfer dengan benar.');
+        return;
+    }
+    if (transferForm.fromWarehouseId === transferForm.toWarehouseId) {
+        alert('Gudang asal dan tujuan tidak boleh sama.');
+        return;
+    }
+    
+    isTransferring.value = true;
+    router.post(`/owner/products/${props.product.id}/transfer`, transferForm, {
+        preserveScroll: true,
+        onSuccess: () => {
+            closeTransferModal();
+        },
+        onFinish: () => {
+            isTransferring.value = false;
+        }
+    });
+};
 </script>
 
 <template>
@@ -246,15 +310,34 @@ const uniqueCategories = computed(() => {
                         </div>
 
                         <!-- Stok -->
-                        <div style="display: grid; grid-template-columns: 140px 1fr; align-items: center; margin-bottom: 28px; gap: 16px;">
-                            <label style="font-size: 14px; font-weight: 600; color: #334155;">Stok</label>
-                            <input
-                                v-model.number="form.stock"
-                                type="number"
-                                :placeholder="isEdit ? 'Masukkan Jumlah Stok' : 'Masukkan Jumlah Stok Awal'"
-                                min="0"
-                                style="width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; background: white; color: #0f172a; outline: none; transition: border 0.2s;"
-                            >
+                        <!-- Stok -->
+                        <div style="display: grid; grid-template-columns: 140px 1fr; align-items: start; margin-bottom: 28px; gap: 16px;">
+                            <label style="font-size: 14px; font-weight: 600; color: #334155; margin-top: 10px;">
+                                Total Stok
+                            </label>
+                            <div>
+                                <input
+                                    v-model.number="form.stock"
+                                    type="number"
+                                    :placeholder="isEdit ? 'Total Stok' : 'Masukkan Jumlah Stok Awal'"
+                                    min="0"
+                                    disabled
+                                    style="width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; background: #f8fafc; color: #0f172a; outline: none; margin-bottom: 12px; cursor: not-allowed;"
+                                >
+                                
+                                <div v-if="isEdit && warehouseStockDescription.length > 0" style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+                                    <div style="font-size: 12px; font-weight: 700; color: #64748b; margin-bottom: 8px; text-transform: uppercase;">Stok Per Gudang</div>
+                                    <div style="display: grid; gap: 8px;">
+                                        <div v-for="w in warehouseStockDescription" :key="w.whId" style="display: flex; align-items: center; gap: 12px;">
+                                            <div style="flex: 1; font-size: 13px; font-weight: 600; color: #334155;">{{ w.name }}</div>
+                                            <input type="text" :value="w.stock" readonly style="width: 80px; text-align: center; padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; background: #f8fafc; color: #0f172a;">
+                                        </div>
+                                    </div>
+                                    <button @click="openTransferModal" type="button" style="margin-top: 12px; width: 100%; padding: 8px; background: white; border: 1px solid #3b82f6; color: #3b82f6; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='white'">
+                                        ⇄ Pindah Stok Antar Gudang
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                         <!-- Pembelian Minimal -->
                         <div style="display: grid; grid-template-columns: 140px 1fr; align-items: center; margin-bottom: 28px; gap: 16px;">
@@ -361,6 +444,55 @@ const uniqueCategories = computed(() => {
                     </form>
                 </div>
             </div>
+            
+            <!-- Modal Transfer Stok -->
+            <div v-if="isTransferModalOpen" style="position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px);">
+                <div style="background: white; border-radius: 12px; width: 100%; max-width: 400px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin: 0; font-size: 18px; font-weight: 800; color: #0f172a;">Pindah Stok</h3>
+                        <button @click="closeTransferModal" type="button" style="background: transparent; border: none; font-size: 20px; color: #94a3b8; cursor: pointer; padding: 4px;">&times;</button>
+                    </div>
+                    
+                    <div style="display: grid; gap: 16px;">
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px;">Dari Gudang</label>
+                            <select v-model="transferForm.fromWarehouseId" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; color: #0f172a;">
+                                <option value="" disabled>Pilih Gudang Asal</option>
+                                <option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px;">Ke Gudang</label>
+                            <select v-model="transferForm.toWarehouseId" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; color: #0f172a;">
+                                <option value="" disabled>Pilih Gudang Tujuan</option>
+                                <option v-for="w in warehouses" :key="w.id" :value="w.id">{{ w.name }}</option>
+                            </select>
+                        </div>
+
+                        <div v-if="product.variants && product.variants.length > 0">
+                            <label style="display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px;">Varian Produk (Opsional jika transfer produk utama)</label>
+                            <select v-model="transferForm.variantId" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; color: #0f172a;">
+                                <option value="">Semua / Produk Utama</option>
+                                <option v-for="v in product.variants" :key="v.id" :value="v.id">{{ v.name }}</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label style="display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px;">Jumlah Ditransfer</label>
+                            <input v-model.number="transferForm.quantity" type="number" min="1" style="width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; color: #0f172a;">
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+                        <button @click="closeTransferModal" type="button" style="padding: 10px 16px; background: white; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; font-weight: 600; color: #64748b; cursor: pointer;">Batal</button>
+                        <button @click="submitTransfer" type="button" :disabled="isTransferring" style="padding: 10px 16px; background: #3b82f6; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; color: white; cursor: pointer; box-shadow: 0 4px 6px -1px rgba(59,130,246,0.5);">
+                            {{ isTransferring ? 'Memproses...' : 'Transfer Sekarang' }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
         </section>
     </AppLayout>
 </template>

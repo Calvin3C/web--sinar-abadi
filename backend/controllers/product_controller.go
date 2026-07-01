@@ -1,8 +1,12 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"sinar-abadi-backend/config"
 	"sinar-abadi-backend/models"
@@ -24,13 +28,14 @@ type CreateProductInput struct {
 	MinPurchase int    `json:"minPurchase"`
 	Price       int64  `json:"price" binding:"required"`
 	Stock       int    `json:"stock"` // initial stock, recorded in stock_logs
-	IsLarge     bool   `json:"isLarge"`
 	ImageURL    string `json:"img"`
 }
 
 // StockUpdateInput represents the request body for stock adjustment.
 type StockUpdateInput struct {
-	Amount int `json:"amount" binding:"required"` // positive = add, negative = subtract
+	Amount      int   `json:"amount" binding:"required"` // positive = add, negative = subtract
+	WarehouseID *uint `json:"warehouseId"`
+	VariantID   *uint `json:"variantId"`
 }
 
 // UpdateProductInput represents the request body for updating an existing product.
@@ -45,17 +50,16 @@ type UpdateProductInput struct {
 	Unit        string `json:"unit"`
 	MinPurchase int    `json:"minPurchase"`
 	Price       int64  `json:"price"`
-	IsLarge     bool   `json:"isLarge"`
 	ImageURL    string `json:"img"`
 }
 
 // getStockByProductID calculates the current stock for a product
-// by summing all qty_changed entries in stock_logs.
+// by summing all stock entries in warehouse_stocks.
 func getStockByProductID(productID string) int {
 	var totalStock int
-	config.DB.Model(&models.StockLog{}).
+	config.DB.Model(&models.WarehouseStock{}).
 		Where("product_id = ?", productID).
-		Select("COALESCE(SUM(qty_changed), 0)").
+		Select("COALESCE(SUM(stock), 0)").
 		Scan(&totalStock)
 	return totalStock
 }
@@ -76,9 +80,9 @@ func toProductResponse(product models.Product) models.ProductResponse {
 		Price:       product.Price,
 		Stock:       getStockByProductID(product.ID),
 		Sold:        product.Sold,
-		IsLarge:     product.IsLarge,
 		ImageURL:    product.ImageURL,
 		Variants:    product.Variants,
+		WarehouseStocks: product.WarehouseStocks,
 		CreatedAt:   product.CreatedAt,
 		UpdatedAt:   product.UpdatedAt,
 	}
@@ -89,7 +93,7 @@ func toProductResponse(product models.Product) models.ProductResponse {
 func GetProducts(c *gin.Context) {
 	var products []models.Product
 
-	query := config.DB.Model(&models.Product{}).Preload("Variants")
+	query := config.DB.Model(&models.Product{}).Preload("Variants").Preload("WarehouseStocks").Preload("Variants.WarehouseStocks")
 
 	// Search filter (by name)
 	if search := c.Query("search"); search != "" {
@@ -164,7 +168,6 @@ func CreateProduct(c *gin.Context) {
 		MinPurchase: input.MinPurchase,
 		Price:       input.Price,
 		Sold:        0,
-		IsLarge:     input.IsLarge,
 		ImageURL:    input.ImageURL,
 	}
 
@@ -212,14 +215,36 @@ func UpdateStock(c *gin.Context) {
 		return
 	}
 
-	// Calculate current stock from stock_logs
-	currentStock := getStockByProductID(productID)
+	// Update or create WarehouseStock if WarehouseID is provided
+	var currentStock int
+	var ws models.WarehouseStock
+	
+	if input.WarehouseID != nil {
+		err := config.DB.Where(models.WarehouseStock{
+			ProductID:   product.ID,
+			VariantID:   input.VariantID,
+			WarehouseID: *input.WarehouseID,
+		}).FirstOrCreate(&ws).Error
+
+		if err == nil {
+			currentStock = ws.Stock
+		}
+	} else {
+		// Calculate current stock from stock_logs if no warehouse is specified (legacy behavior fallback)
+		currentStock = getStockByProductID(productID)
+	}
+
 	newStock := currentStock + input.Amount
 	if newStock < 0 {
-		newStock = 0
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Stok di gudang ini tidak mencukupi untuk dikurangi"})
+		return
 	}
 
 	actualChange := newStock - currentStock
+
+	if actualChange != 0 && input.WarehouseID != nil {
+		config.DB.Model(&ws).Update("stock", newStock)
+	}
 
 	// Log stock change
 	if actualChange != 0 {
@@ -239,6 +264,8 @@ func UpdateStock(c *gin.Context) {
 
 		config.DB.Create(&models.StockLog{
 			ProductID:   product.ID,
+			VariantID:   input.VariantID,
+			WarehouseID: input.WarehouseID,
 			OwnerID:     ownerIDPtr,
 			ChangeType:  changeType,
 			QtyChanged:  actualChange,
@@ -246,6 +273,10 @@ func UpdateStock(c *gin.Context) {
 			Description: reason,
 		})
 	}
+
+	// Reload product with preloads to return complete updated data
+	config.DB.Preload("Variants").Preload("WarehouseStocks").Preload("Variants.WarehouseStocks").Where("id = ?", productID).First(&product)
+
 
 	resp := toProductResponse(product)
 	c.JSON(http.StatusOK, gin.H{
@@ -302,7 +333,6 @@ func UpdateProduct(c *gin.Context) {
 	if input.MinPurchase > 0 {
 		updates["min_purchase"] = input.MinPurchase
 	}
-	updates["is_large"] = input.IsLarge
 	if input.ImageURL != "" {
 		updates["image_url"] = input.ImageURL
 	}
@@ -324,10 +354,49 @@ func GetProductByID(c *gin.Context) {
 	productID := c.Param("id")
 
 	var product models.Product
-	if result := config.DB.Preload("Variants").Where("id = ?", productID).First(&product); result.Error != nil {
+	if result := config.DB.Preload("Variants").Preload("WarehouseStocks").Preload("Variants.WarehouseStocks").Where("id = ?", productID).First(&product); result.Error != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Produk tidak ditemukan"})
 		return
 	}
 
 	c.JSON(http.StatusOK, toProductResponse(product))
+}
+
+// UploadProductImage handles image uploads from mobile app. Owner/Admin only.
+// POST /api/products/upload
+func UploadProductImage(c *gin.Context) {
+	file, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Gagal membaca file gambar"})
+		return
+	}
+
+	if err := os.MkdirAll("uploads/products", 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat direktori upload"})
+		return
+	}
+
+	// Generate unique filename
+	ext := filepath.Ext(file.Filename)
+	filename := fmt.Sprintf("mobile_product_%d%s", time.Now().UnixNano(), ext)
+	filepathStr := fmt.Sprintf("uploads/products/%s", filename)
+
+	if err := c.SaveUploadedFile(file, filepathStr); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan gambar"})
+		return
+	}
+
+	// Host URL is needed to form the full URL, or just return relative URL
+	// Depending on frontend, relative might be better, or absolute based on request host
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	host := c.Request.Host
+	imgURL := fmt.Sprintf("%s://%s/storage/products/%s", scheme, host, filename)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Gambar berhasil diunggah",
+		"image_url": imgURL,
+	})
 }

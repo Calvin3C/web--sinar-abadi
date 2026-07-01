@@ -71,11 +71,7 @@ func main() {
 		// Calculate weight in grams
 		weightGrams := int(weightKg * 1000)
 		if weightGrams == 0 {
-			if p.IsLarge {
-				weightGrams = 15000 // 15kg default for large
-			} else {
-				weightGrams = 2000 // 2kg default
-			}
+			weightGrams = 2000 // 2kg default
 		}
 
 		// Extract Brand from first word of name

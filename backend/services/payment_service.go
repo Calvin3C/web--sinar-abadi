@@ -25,8 +25,16 @@ func (s *PaymentService) InitiatePayment(orderID string, method string, amount i
 
 	// ── Midtrans Online Payment ──
 	if strings.Contains(methodLower, "midtrans") || strings.Contains(methodLower, "online") {
+		var enabledPayments []string
+		
+		// If specific method passed (e.g. "midtrans_gopay")
+		if strings.HasPrefix(methodLower, "midtrans_") {
+			specificMethod := strings.TrimPrefix(methodLower, "midtrans_")
+			enabledPayments = append(enabledPayments, specificMethod)
+		}
+
 		midtrans := NewMidtransService()
-		snapResp, err := midtrans.CreateSnapTransaction(orderID, amount, customerName, customerEmail, customerPhone, shippingAddress, items)
+		snapResp, err := midtrans.CreateSnapTransaction(orderID, amount, customerName, customerEmail, customerPhone, shippingAddress, items, enabledPayments)
 		if err != nil {
 			return nil, fmt.Errorf("gagal membuat transaksi Midtrans: %v", err)
 		}
