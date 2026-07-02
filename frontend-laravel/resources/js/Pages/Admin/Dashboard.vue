@@ -41,8 +41,9 @@ const selectedOrderId = ref('');
 const shippingCode = ref('');
 
 // Delivery vehicle assignment modal
-const isVehicleModalOpen = ref(false);
 const vehicleOrderId = ref('');
+const vehicleOrderCourier = ref('');
+const isVehicleModalOpen = ref(false);
 const selectedVehicleId = ref(null);
 
 const profileForm = useForm({
@@ -230,16 +231,17 @@ const getNextStatusLabel = (currentStatus) => {
     }
 };
 
-const handleDeliveryStatusChange = (orderId, newStatus) => {
+const handleDeliveryStatusChange = (order, newStatus) => {
     if (newStatus === 'Dikirim') {
         // Open vehicle selection modal
-        vehicleOrderId.value = orderId;
+        vehicleOrderId.value = order.id;
+        vehicleOrderCourier.value = order.shipping?.courier || '';
         selectedVehicleId.value = null;
         isVehicleModalOpen.value = true;
         return;
     }
 
-    router.put(`/admin/orders/${orderId}/delivery-status`, {
+    router.put(`/admin/orders/${order.id}/delivery-status`, {
         deliveryStatus: newStatus,
     }, { preserveScroll: true });
 };
@@ -264,6 +266,18 @@ const confirmVehicleAssignment = () => {
 const availableVehicles = computed(() => {
     return (props.fleet || []).filter(v => v.status === 'Tersedia');
 });
+
+const isVehicleLocked = (vehicle) => {
+    if (vehicle.status !== 'Tersedia') return true;
+    
+    const isOrderMotor = vehicleOrderCourier.value.includes('Motor');
+    const isVehicleMotor = vehicle.name.includes('Motor') || vehicle.name.includes('Scoopy');
+    
+    if (isOrderMotor && !isVehicleMotor) return true; // Pesanan motor, kendaraan mobil
+    if (!isOrderMotor && isVehicleMotor) return true; // Pesanan mobil, kendaraan motor
+    
+    return false;
+};
 
 const formatPrice = (price) => {
     return new Intl.NumberFormat('id-ID', {
@@ -578,7 +592,8 @@ const getStatusLabel = (status) => {
                                         style="width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px;"
                                         :style="vehicle.status === 'Tersedia' ? 'background: #dcfce7;' : 'background: #fef3c7;'"
                                     >
-                                        🚛
+                                        <div v-if="vehicle.name.includes('Motor') || vehicle.name.includes('Scoopy')">🏍️</div>
+                                        <div v-else>🚛</div>
                                     </div>
                                     <div>
                                         <div style="font-size: 16px; font-weight: 800; color: #0f172a;">{{ vehicle.name }}</div>
@@ -672,7 +687,7 @@ const getStatusLabel = (status) => {
                                         <td class="text-center">
                                             <template v-if="getNextDeliveryStatus(order.shipping?.deliveryStatus || 'Menunggu')">
                                                 <button 
-                                                    @click="handleDeliveryStatusChange(order.id, getNextDeliveryStatus(order.shipping?.deliveryStatus || 'Menunggu'))"
+                                                    @click.stop="handleDeliveryStatusChange(order, getNextDeliveryStatus(order.shipping?.deliveryStatus || 'Menunggu'))"
                                                     style="padding: 6px 16px; font-size: 12px; font-weight: 700; color: white; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s;"
                                                     :style="{
                                                         background: getNextDeliveryStatus(order.shipping?.deliveryStatus || 'Menunggu') === 'Selesai' ? '#22c55e' 
@@ -761,8 +776,8 @@ const getStatusLabel = (status) => {
         <div v-if="isVehicleModalOpen" class="d-flex" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; padding:16px;">
             <div style="width:100%; max-width:450px; background: white; border-radius: 16px; overflow: hidden; animation: slideUp 0.3s forwards; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);">
                 <div style="padding: 24px 24px 0; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px;">
-                    <h3 style="font-size: 18px; font-weight: 800; color: #0f172a; margin: 0;">🚚 Pilih Mobil Pengiriman</h3>
-                    <p style="font-size: 13px; color: #64748b; margin: 8px 0 0;">Pesanan <strong>{{ vehicleOrderId }}</strong> — Pilih mobil yang akan digunakan untuk mengantar.</p>
+                    <h3 style="font-size: 18px; font-weight: 800; color: #0f172a; margin: 0;">🚚 Pilih Kendaraan Pengiriman</h3>
+                    <p style="font-size: 13px; color: #64748b; margin: 8px 0 0;">Pesanan <strong>{{ vehicleOrderId }}</strong> — Pilih kendaraan yang akan digunakan untuk mengantar.</p>
                 </div>
                 
                 <div style="padding: 24px;">
@@ -773,11 +788,11 @@ const getStatusLabel = (status) => {
                         <div 
                             v-for="vehicle in fleet" 
                             :key="vehicle.id"
-                            @click="vehicle.status === 'Tersedia' ? (selectedVehicleId = vehicle.id) : null"
+                            @click="!isVehicleLocked(vehicle) ? (selectedVehicleId = vehicle.id) : null"
                             style="display: flex; align-items: center; gap: 16px; padding: 16px; border: 2px solid; border-radius: 12px; cursor: pointer; transition: all 0.2s;"
                             :style="selectedVehicleId === vehicle.id 
                                 ? 'border-color: #e11d48; background: #fff1f2;' 
-                                : vehicle.status !== 'Tersedia' 
+                                : isVehicleLocked(vehicle) 
                                     ? 'border-color: #e2e8f0; background: #f8fafc; cursor: not-allowed; opacity: 0.6;' 
                                     : 'border-color: #e2e8f0; background: white;'"
                         >
@@ -787,12 +802,13 @@ const getStatusLabel = (status) => {
                             >
                                 <div v-if="selectedVehicleId === vehicle.id" style="width: 10px; height: 10px; border-radius: 50%; background: #e11d48;"></div>
                             </div>
-                            <div style="font-size: 24px;">🚛</div>
+                            <div style="font-size: 24px;">{{ vehicle.name.includes('Motor') || vehicle.name.includes('Scoopy') ? '🏍️' : '🚛' }}</div>
                             <div style="flex: 1;">
                                 <div style="font-size: 15px; font-weight: 700; color: #0f172a;">{{ vehicle.name }}</div>
                                 <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
-                                    <template v-if="vehicle.status === 'Tersedia'">✅ Tersedia</template>
-                                    <template v-else>⚠️ Sedang Mengantar ({{ vehicle.currentOrderId }})</template>
+                                    <template v-if="vehicle.status !== 'Tersedia'">⚠️ Sedang Mengantar ({{ vehicle.currentOrderId }})</template>
+                                    <template v-else-if="isVehicleLocked(vehicle)">🔒 Tidak Sesuai Tipe Pesanan</template>
+                                    <template v-else>✅ Tersedia</template>
                                 </div>
                             </div>
                         </div>

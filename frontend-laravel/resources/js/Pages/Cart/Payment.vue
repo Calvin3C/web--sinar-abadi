@@ -28,6 +28,7 @@ const { addresses: mockAddresses, addAddress, updateAddress } = useAddresses(pro
 const isAddressModalOpen = ref(false);
 const isEditAddressModalOpen = ref(false);
 const activeTab = ref('semua');
+const selectedFleetType = ref('mobil'); // 'mobil' or 'motor'
 
 const storeAddress = {
     id: 99,
@@ -223,7 +224,7 @@ const selectAddress = async (addr) => {
         selectedDeliveryLocation.value = null;
         checkoutForm.delivery_location_id = null;
     } else if (activeTab.value === 'kurir') {
-        checkoutForm.courier = 'Kurir Toko Sinar Abadi';
+        checkoutForm.courier = selectedFleetType.value === 'motor' ? 'Kurir Toko Sinar Abadi - Motor' : 'Kurir Toko Sinar Abadi - Mobil';
         selectedRate.value = null;
         checkDeliveryLocationMatch();
     } else {
@@ -251,6 +252,12 @@ watch(activeTab, (newTab) => {
             return;
         }
         selectAddress(selectedAddress.value.id === 99 ? mockAddresses.value[0] : selectedAddress.value);
+    }
+});
+
+watch(selectedFleetType, (newVal) => {
+    if (activeTab.value === 'kurir') {
+        checkoutForm.courier = newVal === 'motor' ? 'Kurir Toko Sinar Abadi - Motor' : 'Kurir Toko Sinar Abadi - Mobil';
     }
 });
 
@@ -399,6 +406,7 @@ const openEditAddress = (addr) => {
     addressForm.pinpoint = addr.pinpoint || false;
     addressForm.biteshipAreaId = addr.biteshipAreaId || '';
     addressForm.postalCode = addr.postalCode || '';
+    isSelectingArea.value = true;
     areaSearchQuery.value = addr.kota || '';
     isEditAddressModalOpen.value = true;
 };
@@ -416,6 +424,13 @@ const subtotal = computed(() => {
     return props.cartItems.reduce((acc, item) => acc + (item.price * item.qty), 0);
 });
 
+const totalWeightKg = computed(() => {
+    return props.cartItems.reduce((acc, item) => {
+        const w = item.weight && item.weight > 0 ? item.weight : 2000; // Default 2kg/item
+        return acc + (w * item.qty);
+    }, 0) / 1000;
+});
+
 // PPN calculation if needed, for now just matching UI
 const ppn = computed(() => {
     return subtotal.value * 0.11;
@@ -426,6 +441,12 @@ const currentShippingCost = computed(() => {
         return selectedRate.value.price;
     }
     if (activeTab.value === 'kurir' && selectedDeliveryLocation.value) {
+        if (selectedFleetType.value === 'motor') {
+            const distance = selectedDeliveryLocation.value.distanceKm;
+            if (distance <= 1) return 15000;
+            if (distance <= 1.5) return 20000;
+            return 25000;
+        }
         return selectedDeliveryLocation.value.shippingCost;
     }
     if (activeTab.value === 'ambil') {
@@ -441,13 +462,17 @@ const grandTotal = computed(() => {
 const isCheckoutDisabled = computed(() => {
     const courierNotReady = activeTab.value === 'semua' && !selectedRate.value;
     const kurirNoLocation = activeTab.value === 'kurir' && !selectedDeliveryLocation.value;
+    const kurirInvalidFleet = activeTab.value === 'kurir' && 
+        ((selectedFleetType.value === 'mobil' && subtotal.value < 1000000) || 
+         (selectedFleetType.value === 'motor' && (subtotal.value < 500000 || selectedDeliveryLocation.value?.distanceKm > 2 || totalWeightKg.value > 80)));
+    
     const processing = checkoutForm.processing || isProcessingMidtrans.value;
     
     if (selectedPaymentMethod.value.startsWith('midtrans')) {
-        return processing || courierNotReady || kurirNoLocation;
+        return processing || courierNotReady || kurirNoLocation || kurirInvalidFleet;
     }
     // Manual: also need proof
-    return processing || !checkoutForm.proof || courierNotReady || kurirNoLocation;
+    return processing || !checkoutForm.proof || courierNotReady || kurirNoLocation || kurirInvalidFleet;
 });
 
 const handleCheckout = async () => {
@@ -626,7 +651,7 @@ const handleCheckout = async () => {
                                         <template v-if="checkoutForm.courier === 'Ambil Di Toko'">
                                             <span style="font-weight: 700; color: #0f172a; font-size: 14px;">Ambil Di Toko</span>
                                         </template>
-                                        <template v-else-if="checkoutForm.courier === 'Kurir Toko Sinar Abadi'">
+                                        <template v-else-if="checkoutForm.courier.includes('Kurir Toko Sinar Abadi')">
                                             <span style="font-weight: 700; color: #0f172a; font-size: 14px;">Kurir Sinar Abadi - {{ selectedAddress.name }}</span>
                                         </template>
                                         <template v-else>
@@ -653,19 +678,59 @@ const handleCheckout = async () => {
                                 <div style="font-weight: 700; font-size: 14px; color: #0f172a;">Ambil Di Toko</div>
                                 <div style="font-size: 13px; color: #64748b; margin-top: 4px;">Barang diambil sendiri di toko Sinar Abadi. (Gratis)</div>
                             </template>
-                            <template v-else-if="checkoutForm.courier === 'Kurir Toko Sinar Abadi'">
+                            <template v-else-if="checkoutForm.courier.includes('Kurir Toko Sinar Abadi')">
                                 <div style="font-weight: 700; font-size: 14px; color: #0f172a;">Kurir Toko Sinar Abadi</div>
                                 <div style="font-size: 13px; color: #64748b; margin-top: 4px;">Dikirim oleh armada toko kami ke desa tujuan.</div>
                                 
-                                <!-- Delivery Location Auto Match -->
+                                <!-- Fleet Selection -->
+                                <div style="margin-top: 16px; display: flex; gap: 12px;">
+                                    <label 
+                                        style="flex: 1; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px;"
+                                        :style="selectedFleetType === 'mobil' ? { borderColor: '#e11d48', background: '#fff1f2' } : { background: 'white' }"
+                                    >
+                                        <input type="radio" v-model="selectedFleetType" value="mobil" style="accent-color: #e11d48;">
+                                        <div>
+                                            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Mobil (Barang Berat)</div>
+                                            <div style="font-size: 11px; color: #64748b;">Min. belanja Rp 1.000.000</div>
+                                        </div>
+                                    </label>
+                                    <label 
+                                        style="flex: 1; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px;"
+                                        :style="selectedFleetType === 'motor' ? { borderColor: '#e11d48', background: '#fff1f2' } : { background: 'white' }"
+                                    >
+                                        <input type="radio" v-model="selectedFleetType" value="motor" style="accent-color: #e11d48;">
+                                        <div>
+                                            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Motor (Barang Ringan)</div>
+                                            <div style="font-size: 11px; color: #64748b;">Min. belanja Rp 500.000, Maks 2 km.</div>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <div v-if="selectedFleetType === 'mobil' && subtotal < 1000000" style="margin-top: 8px; font-size: 12px; color: #dc2626; font-weight: 600;">
+                                    * Pembelian minimal Rp 1.000.000 untuk pengiriman mobil.
+                                </div>
+                                <div v-if="selectedFleetType === 'motor' && subtotal < 500000" style="margin-top: 8px; font-size: 12px; color: #dc2626; font-weight: 600;">
+                                    * Pembelian minimal Rp 500.000 untuk pengiriman motor.
+                                </div>
+                                <div v-if="selectedFleetType === 'motor' && selectedDeliveryLocation && selectedDeliveryLocation.distanceKm > 2" style="margin-top: 8px; font-size: 12px; color: #dc2626; font-weight: 600;">
+                                    * Jarak lokasi Anda ({{ selectedDeliveryLocation.distanceKm }} km) melebihi batas maksimal pengiriman motor (2 km).
+                                </div>
+                                <div v-if="selectedFleetType === 'motor' && totalWeightKg > 80" style="margin-top: 8px; font-size: 12px; color: #dc2626; font-weight: 600;">
+                                    * Total berat pesanan Anda ({{ totalWeightKg }} kg) melebihi kapasitas motor (80 kg).
+                                </div>
+
+
                                 <div style="margin-top: 16px;">
                                     <div v-if="isFetchingLocations" style="font-size: 13px; color: #64748b; padding: 12px; text-align: center;">
                                         Memuat data lokasi...
                                     </div>
                                     <div v-else-if="selectedDeliveryLocation" style="padding: 10px 14px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px;">
-                                        <div style="font-size: 12px; color: #166534; font-weight: 600;">Tujuan dikenali: <strong>{{ selectedDeliveryLocation.name }}</strong></div>
+                                        <div style="font-size: 12px; color: #166534; font-weight: 600;">
+                                            Tujuan dikenali: <strong>{{ selectedDeliveryLocation.name }}</strong> 
+                                            <span v-if="selectedDeliveryLocation.distanceKm">({{ selectedDeliveryLocation.distanceKm }} km)</span>
+                                        </div>
                                         <div style="font-size: 13px; color: #166534; font-weight: 800; margin-top: 2px;">
-                                            Ongkir: {{ selectedDeliveryLocation.shippingCost === 0 ? 'GRATIS' : formatPrice(selectedDeliveryLocation.shippingCost) }}
+                                            Ongkir: {{ currentShippingCost === 0 ? 'GRATIS' : formatPrice(currentShippingCost) }}
                                         </div>
                                     </div>
                                     <div v-else style="padding: 10px 14px; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px;">
@@ -732,9 +797,7 @@ const handleCheckout = async () => {
                                         <span style="font-size: 14px; font-weight: 600; color: #1e293b;">
                                             {{ method.name }}
                                         </span>
-                                        <span style="font-size: 11px; font-weight: 700; color: white; background: linear-gradient(135deg, #0ea5e9, #6366f1); padding: 2px 8px; border-radius: 4px; margin-left: 8px;">
-                                            {{ method.badge }}
-                                        </span>
+
                                     </div>
                                 </div>
                             </div>
@@ -843,13 +906,12 @@ const handleCheckout = async () => {
                                     type="submit" 
                                     class="btn w-100" 
                                     :style="[
-                                        { background: selectedPaymentMethod.startsWith('midtrans') ? 'linear-gradient(135deg, #0ea5e9, #6366f1)' : '#0f172a', color: 'white', fontSize: '14px', padding: '16px', fontWeight: '700', borderRadius: '6px', border: 'none', cursor: 'pointer', transition: 'all 0.3s ease' },
+                                        { background: '#dc2626', color: 'white', fontSize: '14px', padding: '16px', fontWeight: '700', borderRadius: '6px', border: 'none', cursor: 'pointer', transition: 'all 0.3s ease' },
                                         isCheckoutDisabled ? { opacity: 0.5, cursor: 'not-allowed' } : {}
                                     ]"
                                     :disabled="isCheckoutDisabled"
                                 >
                                     <span v-if="checkoutForm.processing || isProcessingMidtrans">MEMPROSES PESANAN...</span>
-                                    <span v-else-if="selectedPaymentMethod.startsWith('midtrans')">&#x1F512; BAYAR OTOMATIS</span>
                                     <span v-else>BAYAR SEKARANG</span>
                                 </button>
                             </form>
@@ -873,10 +935,10 @@ const handleCheckout = async () => {
                             <div class="d-flex justify-between align-center mb-4" style="font-size: 14px; color: #64748b;">
                                 <span>Ongkos Kirim</span>
                                 <span style="color: #0f172a; font-weight: 500;">
-                                    <template v-if="checkoutForm.courier === 'Kurir Toko Sinar Abadi'">
+                                    <template v-if="checkoutForm.courier.includes('Kurir Toko Sinar Abadi')">
                                         <template v-if="selectedDeliveryLocation">
-                                            <span v-if="selectedDeliveryLocation.shippingCost === 0" style="color: #059669; font-weight: 700;">Gratis</span>
-                                            <span v-else>{{ formatPrice(selectedDeliveryLocation.shippingCost) }}</span>
+                                            <span v-if="currentShippingCost === 0" style="color: #059669; font-weight: 700;">Gratis</span>
+                                            <span v-else>{{ formatPrice(currentShippingCost) }}</span>
                                         </template>
                                         <span v-else style="color: #dc2626; font-style: italic; font-size: 13px;">(tujuan tidak terjangkau)</span>
                                     </template>

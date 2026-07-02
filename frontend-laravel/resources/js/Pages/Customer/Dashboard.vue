@@ -72,7 +72,7 @@ let searchTimeout = null;
 watch(areaSearchQuery, (newQuery) => {
     if (searchTimeout) clearTimeout(searchTimeout);
     
-    if (newQuery.length < 3) {
+    if (newQuery.length < 3 || newQuery === addressForm.kota) {
         areaSearchResults.value = [];
         return;
     }

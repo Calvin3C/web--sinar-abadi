@@ -46,7 +46,7 @@ func main() {
 		unit := "Pcs"
 
 		if isSemen {
-			minPurchase = 10
+			minPurchase = 1
 			unit = "Sak"
 		} else if isCat {
 			if weightKg >= 1 && weightKg <= 5 {
