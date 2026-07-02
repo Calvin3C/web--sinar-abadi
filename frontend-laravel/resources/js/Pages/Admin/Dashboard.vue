@@ -441,7 +441,7 @@ const getStatusLabel = (status) => {
                                 </div>
                                 <div class="form-group mb-6">
                                     <label class="form-label" style="font-size: 14px; font-weight: 600; color: #475569; margin-bottom: 8px; display: block;">Password Baru <span style="font-weight: 400; color: #94a3b8;">(Kosongkan jika tidak ingin mengubah)</span></label>
-                                    <input type="password" v-model="profileForm.password" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;" placeholder="Min. 3 karakter">
+                                    <input type="password" v-model="profileForm.password" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;" placeholder="Min. 5 karakter">
                                 </div>
                                 
                                 <button type="submit" style="padding: 12px 24px; background: #e11d48; color: white; border-radius: 8px; font-weight: 700; border: none; cursor: pointer;" :disabled="profileForm.processing">Simpan Perubahan</button>
@@ -582,7 +582,7 @@ const getStatusLabel = (status) => {
 
                                     <!-- Aksi Logistik -->
                                     <td class="text-center">
-                                        <template v-if="order.status?.toUpperCase() !== 'PENDING' && order.status?.toUpperCase() !== 'CANCELLED'">
+                                        <template v-if="order.status?.toUpperCase() !== 'PENDING' && order.status?.toUpperCase() !== 'CANCELLED' && order.status?.toUpperCase() !== 'COMPLETED'">
                                             <!-- Jasa Kurir (JNE, JNT, dll): Admin can mark as shipped -->
                                             <template v-if="getShippingType(order.shippingMethod) === 'kurir'">
                                                 <button 

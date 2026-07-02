@@ -592,14 +592,42 @@ const filteredOrders = computed(() => {
     return ordersToFilter;
 });
 
+const historySearchQuery = ref('');
+const historyDateFilter = ref('');
+
 const historyOrders = computed(() => {
-    return filteredOrders.value.filter(o => o.status?.toLowerCase() === 'completed');
+    let ordersToFilter = props.orders || [];
+    
+    ordersToFilter = ordersToFilter.filter(o => o.status?.toLowerCase() === 'completed');
+
+    if (historySearchQuery.value) {
+        const q = historySearchQuery.value.toLowerCase();
+        ordersToFilter = ordersToFilter.filter(o => 
+            o.id.toLowerCase().includes(q) || 
+            (o.items && o.items.some(item => item.name.toLowerCase().includes(q))) ||
+            (o.customer && o.customer.toLowerCase().includes(q))
+        );
+    }
+    
+    if (historyDateFilter.value) {
+        ordersToFilter = ordersToFilter.filter(o => {
+            if (!o.createdAt) return false;
+            return o.createdAt.startsWith(historyDateFilter.value);
+        });
+    }
+
+    return ordersToFilter;
 });
 
 const resetOrderFilters = () => {
     orderSearchQuery.value = '';
     orderDateFilter.value = '';
     orderStatusFilter.value = 'Semua';
+};
+
+const resetHistoryFilters = () => {
+    historySearchQuery.value = '';
+    historyDateFilter.value = '';
 };
 
 
@@ -782,7 +810,7 @@ const handleDeleteAdmin = (adminUsername) => {
                                 </div>
                                 <div class="form-group mb-6">
                                     <label class="form-label" style="font-size: 14px; font-weight: 600; color: #475569; margin-bottom: 8px; display: block;">Password Baru <span style="font-weight: 400; color: #94a3b8;">(Kosongkan jika tidak ingin mengubah)</span></label>
-                                    <input type="password" v-model="profileForm.password" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;" placeholder="Min. 3 karakter">
+                                    <input type="password" v-model="profileForm.password" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;" placeholder="Min. 5 karakter">
                                 </div>
                                 
                                 <button type="submit" style="padding: 12px 24px; background: #e11d48; color: white; border-radius: 8px; font-weight: 700; border: none; cursor: pointer;" :disabled="profileForm.processing">Simpan Perubahan</button>
@@ -1381,17 +1409,17 @@ const handleDeleteAdmin = (adminUsername) => {
                             <!-- Search -->
                             <div style="position: relative; flex: 1; min-width: 250px;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 12px; top: 11px;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                                <input v-model="orderSearchQuery" type="text" placeholder="Cari ID Pesanan / Produk" style="width: 100%; padding: 8px 12px 8px 36px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;">
+                                <input v-model="historySearchQuery" type="text" placeholder="Cari ID Pesanan / Produk" style="width: 100%; padding: 8px 12px 8px 36px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;">
                             </div>
                             
                             <!-- Date Filter -->
                             <div style="position: relative; min-width: 150px;">
-                                <input v-model="orderDateFilter" type="date" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; color: #475569;">
+                                <input v-model="historyDateFilter" type="date" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; color: #475569;">
                             </div>
                         </div>
 
                             <div style="width: 100%; text-align: right; margin-top: 8px;">
-                                <span @click="resetOrderFilters" style="font-size: 12px; font-weight: 700; color: #16a34a; cursor: pointer;">Reset Filter</span>
+                                <span @click="resetHistoryFilters" style="font-size: 12px; font-weight: 700; color: #16a34a; cursor: pointer;">Reset Filter</span>
                             </div>
                     </div>
                     <div class="table-responsive">
@@ -1626,7 +1654,7 @@ const handleDeleteAdmin = (adminUsername) => {
                     </div>
                     <div class="form-group mb-6">
                         <label class="form-label">Password Baru <span style="font-weight: 400; color: #94a3b8; font-size: 12px;">(Kosongkan jika tak diubah)</span></label>
-                        <input type="password" class="form-input" v-model="editAdminForm.password" placeholder="Min. 3 karakter">
+                        <input type="password" class="form-input" v-model="editAdminForm.password" placeholder="Min. 5 karakter">
                     </div>
                     <div class="d-flex justify-between gap-4">
                         <button type="button" @click="isEditAdminModalOpen = false" class="btn btn-outline w-100">Batal</button>
@@ -1659,7 +1687,7 @@ const handleDeleteAdmin = (adminUsername) => {
                     </div>
                     <div class="form-group mb-6">
                         <label class="form-label">Password</label>
-                        <input type="password" class="form-input" v-model="newAdminForm.password" placeholder="Min. 3 karakter" required>
+                        <input type="password" class="form-input" v-model="newAdminForm.password" placeholder="Min. 5 karakter" required>
                     </div>
                     <div class="d-flex justify-between gap-4">
                         <button type="button" @click="isCreateAdminModalOpen = false" class="btn btn-outline w-100">Batal</button>
