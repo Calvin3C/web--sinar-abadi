@@ -38,7 +38,6 @@ const handleAddToCart = () => {
         name: props.product.name,
         price: props.product.price,
         img: props.product.img || '',
-        isLarge: props.product.isLarge || false,
         weight: props.product.weight || 0,
         length: props.product.length || 1,
         width: props.product.width || 1,
@@ -59,7 +58,6 @@ const handleAddToCart = () => {
     <div class="product-card">
         <Link :href="'/katalog/' + product.id" class="product-image-wrap">
             <span v-if="product.stock <= 0" class="product-badge">Habis</span>
-            <span v-if="product.isLarge" class="size-badge">Barang Besar</span>
             <img 
                 :src="product.img || 'https://placehold.co/400x300/e2e8f0/64748b?text=No+Image'" 
                 :alt="product.name" 

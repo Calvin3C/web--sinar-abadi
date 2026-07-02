@@ -27,9 +27,7 @@ const subtotal = computed(() => {
     return props.cartItems.reduce((acc, item) => acc + (item.price * item.qty), 0);
 });
 
-const hasLargeItem = computed(() => {
-    return props.cartItems.some(item => item.isLarge);
-});
+
 
 const shippingCost = computed(() => {
     return props.logistic?.cost || 0;
@@ -84,7 +82,6 @@ const removeItem = (id) => {
                                         </button>
                                     </div>
                                     <div v-if="item.color" style="font-size: 13px; color: #64748b; margin-bottom: 4px;">Warna: <span style="font-weight: 500;">{{ item.color }}</span></div>
-                                    <span v-if="item.isLarge" class="cart-item-size">Barang Besar</span>
                                     <div class="cart-item-price">{{ formatPrice(item.price) }}</div>
                                     <div class="d-flex justify-between align-center mt-2">
                                         <div class="qty-controls">
@@ -104,18 +101,6 @@ const removeItem = (id) => {
                     <!-- Right: Summary -->
                     <div class="sidebar-card">
                         <h3 class="mb-4" style="font-size:18px;">Ringkasan Belanja</h3>
-                        <div class="summary-row">
-                            <span>Subtotal</span>
-                            <span>{{ formatPrice(subtotal) }}</span>
-                        </div>
-                        <div class="summary-row" v-if="hasLargeItem">
-                            <span style="color:var(--color-warning);">Tambahan Ongkir (Barang Besar)</span>
-                            <span>Sudah Termasuk</span>
-                        </div>
-                        <div class="summary-row">
-                            <span>Ongkos Kirim</span>
-                            <span>{{ shippingCost > 0 ? formatPrice(shippingCost) : '-' }}</span>
-                        </div>
                         <div class="summary-total">
                             <span>Total</span>
                             <span>{{ formatPrice(subtotal) }}</span>

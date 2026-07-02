@@ -8,7 +8,7 @@ type InboundOrder struct {
 	ExpectedDate time.Time          `json:"expectedDate"`
 	TotalCost    int64              `json:"totalCost"`
 	Status       string             `gorm:"size:20;default:'pending'" json:"status"`
-	AdminID      *uint              `json:"adminId"`
+	OwnerID      *uint              `json:"ownerId"`
 	Items        []InboundOrderItem `json:"items"`
 	CreatedAt    time.Time          `json:"createdAt"`
 	UpdatedAt    time.Time          `json:"updatedAt"`

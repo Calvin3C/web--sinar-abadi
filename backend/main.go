@@ -51,6 +51,15 @@ func main() {
 	}
 	log.Println("✅ Database migration completed")
 
+	// Drop deprecated is_large column if it still exists
+	if config.DB.Migrator().HasColumn(&models.Product{}, "is_large") {
+		if err := config.DB.Migrator().DropColumn(&models.Product{}, "is_large"); err != nil {
+			log.Printf("⚠️ Could not drop is_large column: %v", err)
+		} else {
+			log.Println("✅ Dropped deprecated is_large column from products")
+		}
+	}
+
 	// Run seeder (only seeds if tables are empty)
 	seed.RunSeeder(config.DB)
 
@@ -91,6 +100,7 @@ func main() {
 	productAuth := api.Group("/products")
 	productAuth.Use(middleware.AuthRequired())
 	{
+		productAuth.POST("/upload", middleware.RoleRequired("admin", "owner"), controllers.UploadProductImage)
 		productAuth.POST("", middleware.RoleRequired("admin", "owner"), controllers.CreateProduct)
 		productAuth.PUT("/:id/stock", middleware.RoleRequired("owner"), controllers.UpdateStock)
 		productAuth.PUT("/:id", middleware.RoleRequired("admin", "owner"), controllers.UpdateProduct)
@@ -128,6 +138,9 @@ func main() {
 	api.POST("/biteship/rates", controllers.CalculateRates)
 	api.POST("/biteship/webhook", controllers.BiteshipWebhook)
 	api.GET("/biteship/tracking/:id", controllers.GetTracking)
+
+	// --- Chatbot (Public/Customer) ---
+	api.POST("/chatbot", controllers.HandleChatbot)
 
 	// --- Midtrans Payment Webhook (Public) ---
 	api.POST("/midtrans/webhook", controllers.MidtransWebhook)

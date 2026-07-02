@@ -130,7 +130,6 @@ const handleAddToCart = () => {
         name: props.product.name,
         price: displayPrice.value,
         img: props.product.img || '',
-        isLarge: props.product.isLarge || false,
         weight: props.product.weight || 0,
         length: props.product.length || 1,
         width: props.product.width || 1,
@@ -175,7 +174,7 @@ const getWeight = () => {
         const gramStr = new Intl.NumberFormat('id-ID').format(weightKg * 1000);
         return `${gramStr} Gram / ${weightKg} Kg`;
     }
-    return props.product.isLarge ? '15.000 Gram / 15 Kg' : '2.000 Gram / 2 Kg';
+    return '2.000 Gram / 2 Kg';
 };
 
 const getWaLink = () => {
