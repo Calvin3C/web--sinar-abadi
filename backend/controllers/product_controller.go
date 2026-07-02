@@ -1,8 +1,12 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"sinar-abadi-backend/config"
 	"sinar-abadi-backend/models"
@@ -24,7 +28,6 @@ type CreateProductInput struct {
 	MinPurchase int    `json:"minPurchase"`
 	Price       int64  `json:"price" binding:"required"`
 	Stock       int    `json:"stock"` // initial stock, recorded in stock_logs
-	IsLarge     bool   `json:"isLarge"`
 	ImageURL    string `json:"img"`
 }
 
@@ -47,7 +50,6 @@ type UpdateProductInput struct {
 	Unit        string `json:"unit"`
 	MinPurchase int    `json:"minPurchase"`
 	Price       int64  `json:"price"`
-	IsLarge     bool   `json:"isLarge"`
 	ImageURL    string `json:"img"`
 }
 
@@ -78,7 +80,6 @@ func toProductResponse(product models.Product) models.ProductResponse {
 		Price:       product.Price,
 		Stock:       getStockByProductID(product.ID),
 		Sold:        product.Sold,
-		IsLarge:     product.IsLarge,
 		ImageURL:    product.ImageURL,
 		Variants:    product.Variants,
 		WarehouseStocks: product.WarehouseStocks,
@@ -167,7 +168,6 @@ func CreateProduct(c *gin.Context) {
 		MinPurchase: input.MinPurchase,
 		Price:       input.Price,
 		Sold:        0,
-		IsLarge:     input.IsLarge,
 		ImageURL:    input.ImageURL,
 	}
 
@@ -333,7 +333,6 @@ func UpdateProduct(c *gin.Context) {
 	if input.MinPurchase > 0 {
 		updates["min_purchase"] = input.MinPurchase
 	}
-	updates["is_large"] = input.IsLarge
 	if input.ImageURL != "" {
 		updates["image_url"] = input.ImageURL
 	}
@@ -361,4 +360,43 @@ func GetProductByID(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, toProductResponse(product))
+}
+
+// UploadProductImage handles image uploads from mobile app. Owner/Admin only.
+// POST /api/products/upload
+func UploadProductImage(c *gin.Context) {
+	file, err := c.FormFile("image")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Gagal membaca file gambar"})
+		return
+	}
+
+	if err := os.MkdirAll("uploads/products", 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal membuat direktori upload"})
+		return
+	}
+
+	// Generate unique filename
+	ext := filepath.Ext(file.Filename)
+	filename := fmt.Sprintf("mobile_product_%d%s", time.Now().UnixNano(), ext)
+	filepathStr := fmt.Sprintf("uploads/products/%s", filename)
+
+	if err := c.SaveUploadedFile(file, filepathStr); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Gagal menyimpan gambar"})
+		return
+	}
+
+	// Host URL is needed to form the full URL, or just return relative URL
+	// Depending on frontend, relative might be better, or absolute based on request host
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	host := c.Request.Host
+	imgURL := fmt.Sprintf("%s://%s/storage/products/%s", scheme, host, filename)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Gambar berhasil diunggah",
+		"image_url": imgURL,
+	})
 }

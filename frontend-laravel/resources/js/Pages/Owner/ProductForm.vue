@@ -43,7 +43,6 @@ const form = useForm({
     height: props.product?.height || 1,
     unit: props.product?.unit || '',
     minPurchase: props.product?.minPurchase || 1,
-    isLarge: props.product?.isLarge || false,
     img: props.product?.img || '',
     photo_main: null,
     photo_1: null,

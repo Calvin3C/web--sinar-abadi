@@ -121,7 +121,7 @@ class AdminController extends Controller
             'username' => 'required|string',
             'email' => 'nullable|string',
             'phone' => 'nullable|string',
-            'password' => 'nullable|string|min:3',
+            'password' => 'nullable|string|min:5',
         ]);
 
         $data = [

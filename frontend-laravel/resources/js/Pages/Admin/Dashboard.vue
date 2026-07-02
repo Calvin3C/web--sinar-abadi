@@ -45,6 +45,27 @@ const isVehicleModalOpen = ref(false);
 const vehicleOrderId = ref('');
 const selectedVehicleId = ref(null);
 
+// Order detail modal
+const isOrderDetailModalOpen = ref(false);
+const selectedOrderDetail = ref(null);
+
+const openOrderDetail = (order) => {
+    selectedOrderDetail.value = order;
+    isOrderDetailModalOpen.value = true;
+};
+
+const customerSearchQuery = ref('');
+const filteredCustomers = computed(() => {
+    if (!customerSearchQuery.value) return props.customers || [];
+    const q = customerSearchQuery.value.toLowerCase();
+    return (props.customers || []).filter(c => 
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.username || '').toLowerCase().includes(q) ||
+        (c.email || '').toLowerCase().includes(q) ||
+        (c.phone || '').toLowerCase().includes(q)
+    );
+});
+
 const profileForm = useForm({
     name: props.profile?.name || '',
     username: props.profile?.username || '',
@@ -180,6 +201,7 @@ const kurirTokoOrders = computed(() => {
 
 const deliverySearchQuery = ref('');
 const deliveryStatusFilter = ref('Semua');
+const deliveryDateFilter = ref('');
 
 const filteredDeliveryOrders = computed(() => {
     let orders = kurirTokoOrders.value;
@@ -197,6 +219,10 @@ const filteredDeliveryOrders = computed(() => {
         orders = orders.filter(o => {
             return (o.shipping?.deliveryStatus || 'Menunggu') === deliveryStatusFilter.value;
         });
+    }
+
+    if (deliveryDateFilter.value) {
+        orders = orders.filter(o => o.createdAt && o.createdAt.startsWith(deliveryDateFilter.value));
     }
 
     return orders;
@@ -415,7 +441,7 @@ const getStatusLabel = (status) => {
                                 </div>
                                 <div class="form-group mb-6">
                                     <label class="form-label" style="font-size: 14px; font-weight: 600; color: #475569; margin-bottom: 8px; display: block;">Password Baru <span style="font-weight: 400; color: #94a3b8;">(Kosongkan jika tidak ingin mengubah)</span></label>
-                                    <input type="password" v-model="profileForm.password" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;" placeholder="Min. 3 karakter">
+                                    <input type="password" v-model="profileForm.password" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;" placeholder="Min. 5 karakter">
                                 </div>
                                 
                                 <button type="submit" style="padding: 12px 24px; background: #e11d48; color: white; border-radius: 8px; font-weight: 700; border: none; cursor: pointer;" :disabled="profileForm.processing">Simpan Perubahan</button>
@@ -423,19 +449,57 @@ const getStatusLabel = (status) => {
                         </div>
                         
                         <template v-else>
-                        <!-- Tab 0: Dashboard (Stats Only) -->
-                        <div v-if="activeTab === 'dashboard'" class="stats-grid mb-6">
-                            <div class="stat-card">
-                                <span class="stat-title">Total Pesanan</span>
-                                <span class="stat-value">{{ stats.totalOrders }}</span>
+                        <!-- Tab 0: Dashboard -->
+                        <div v-if="activeTab === 'dashboard'">
+                            <div class="stats-grid mb-6">
+                                <div class="stat-card">
+                                    <span class="stat-title">Total Pesanan</span>
+                                    <span class="stat-value">{{ stats.totalOrders }}</span>
+                                </div>
+                                <div class="stat-card">
+                                    <span class="stat-title" style="color: var(--color-warning);">Menunggu Status Order</span>
+                                    <span class="stat-value" style="color: var(--color-warning);">{{ stats.pendingOrders }}</span>
+                                </div>
+                                <div class="stat-card">
+                                    <span class="stat-title">Total Pelanggan</span>
+                                    <span class="stat-value">{{ stats.totalCustomers }}</span>
+                                </div>
                             </div>
-                            <div class="stat-card">
-                                <span class="stat-title" style="color: var(--color-warning);">Menunggu Status Order</span>
-                                <span class="stat-value" style="color: var(--color-warning);">{{ stats.pendingOrders }}</span>
-                            </div>
-                            <div class="stat-card">
-                                <span class="stat-title">Total Pelanggan</span>
-                                <span class="stat-value">{{ stats.totalCustomers }}</span>
+
+                            <div class="table-card">
+                                <div class="table-header">
+                                    <h3 style="font-size:18px;">Daftar Pelanggan Terbaru</h3>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Nama Lengkap</th>
+                                                <th>Username</th>
+                                                <th>Email</th>
+                                                <th>No Telepon</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="cust in customers.slice(0, 10)" :key="cust.username">
+                                                <td style="font-weight: 700;">{{ cust.name }}</td>
+                                                <td>{{ cust.username }}</td>
+                                                <td>{{ cust.email || '-' }}</td>
+                                                <td>{{ cust.phone || '-' }}</td>
+                                            </tr>
+                                            <tr v-if="customers.length === 0">
+                                                <td colspan="4" class="text-center text-muted" style="padding: 40px 0;">
+                                                    Belum ada data customer terdaftar.
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div v-if="customers.length > 10" style="padding: 16px; text-align: center; border-top: 1px solid #e2e8f0;">
+                                    <button @click="activeTab = 'customers'" style="color: #e11d48; font-weight: 600; font-size: 14px; background: none; border: none; cursor: pointer;">
+                                        Lihat Semua Pelanggan →
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -487,8 +551,12 @@ const getStatusLabel = (status) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="order in filteredOrders" :key="order.id">
-                                    <td style="font-weight: 800; font-family: monospace;">{{ order.id }}</td>
+                                <tr v-for="order in filteredOrders" :key="order.id" @click="openOrderDetail(order)" style="cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                                    <td 
+                                        style="font-weight: 800; font-family: monospace; color: #0f172a;"
+                                    >
+                                        {{ order.id }}
+                                    </td>
                                     <td>{{ formatDate(order.createdAt) }}</td>
                                     <td style="font-weight: 600; color: #0f172a;">
                                         {{ order.shippingMethod || 'JNE' }}
@@ -514,15 +582,15 @@ const getStatusLabel = (status) => {
 
                                     <!-- Aksi Logistik -->
                                     <td class="text-center">
-                                        <template v-if="order.status?.toUpperCase() !== 'PENDING' && order.status?.toUpperCase() !== 'CANCELLED'">
+                                        <template v-if="order.status?.toUpperCase() !== 'PENDING' && order.status?.toUpperCase() !== 'CANCELLED' && order.status?.toUpperCase() !== 'COMPLETED'">
                                             <!-- Jasa Kurir (JNE, JNT, dll): Admin can mark as shipped -->
                                             <template v-if="getShippingType(order.shippingMethod) === 'kurir'">
                                                 <button 
                                                     v-if="order.status?.toUpperCase() === 'SUCCESS' || order.status?.toUpperCase() === 'VERIFIED'"
-                                                    @click="handleMarkShipping(order.id)"
+                                                    @click.stop="handleMarkShipping(order.id)"
                                                     style="padding: 6px 18px; font-size: 12px; font-weight: 700; color: white; background: #e11d48; border: none; border-radius: 6px; cursor: pointer;"
                                                 >
-                                                    Cetak Resi
+                                                    Proses Pesanan & Kirim
                                                 </button>
                                                 <span v-else style="color: #94a3b8; font-size: 12px;">-</span>
                                             </template>
@@ -531,7 +599,7 @@ const getStatusLabel = (status) => {
                                             <template v-else-if="getShippingType(order.shippingMethod) === 'ambil'">
                                                 <button 
                                                     v-if="order.status?.toUpperCase() === 'SUCCESS' || order.status?.toUpperCase() === 'VERIFIED'"
-                                                    @click="handleMarkCompleted(order.id)"
+                                                    @click.stop="handleMarkCompleted(order.id)"
                                                     style="padding: 6px 18px; font-size: 12px; font-weight: 700; color: white; background: #2563eb; border: none; border-radius: 6px; cursor: pointer;"
                                                 >
                                                     Selesai
@@ -542,7 +610,7 @@ const getStatusLabel = (status) => {
                                             <!-- Kurir Sinar Abadi: Redirect to delivery tab -->
                                             <template v-else-if="getShippingType(order.shippingMethod) === 'kurir_toko'">
                                                 <button 
-                                                    @click="activeTab = 'delivery'"
+                                                    @click.stop="activeTab = 'delivery'"
                                                     style="padding: 6px 18px; font-size: 12px; font-weight: 600; color: #e11d48; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; cursor: pointer;"
                                                 >
                                                     Kelola di Tab Pengiriman →
@@ -615,6 +683,10 @@ const getStatusLabel = (status) => {
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 12px; top: 11px;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                                     <input v-model="deliverySearchQuery" type="text" placeholder="Cari ID / Pelanggan / Alamat" style="width: 100%; padding: 8px 12px 8px 36px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px;">
                                 </div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <input v-model="deliveryDateFilter" type="date" style="padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; color: #475569;">
+                                    <button v-if="deliveryDateFilter" @click="deliveryDateFilter = ''" style="background: none; border: none; color: #e11d48; cursor: pointer; font-size: 12px; font-weight: 700;">Reset</button>
+                                </div>
                             </div>
 
                             <div class="d-flex align-center gap-2 flex-wrap w-100">
@@ -647,8 +719,12 @@ const getStatusLabel = (status) => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="order in filteredDeliveryOrders" :key="order.id">
-                                        <td style="font-weight: 800; font-family: monospace;">{{ order.id }}</td>
+                                    <tr v-for="order in filteredDeliveryOrders" :key="order.id" @click="openOrderDetail(order)" style="cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                                        <td 
+                                            style="font-weight: 800; font-family: monospace; color: #0f172a;"
+                                        >
+                                            {{ order.id }}
+                                        </td>
                                         <td>{{ formatDate(order.createdAt) }}</td>
                                         <td style="font-weight: 600;">{{ order.customer || '-' }}</td>
                                         <td style="max-width: 200px; white-space: normal; font-size: 13px;">
@@ -672,7 +748,7 @@ const getStatusLabel = (status) => {
                                         <td class="text-center">
                                             <template v-if="getNextDeliveryStatus(order.shipping?.deliveryStatus || 'Menunggu')">
                                                 <button 
-                                                    @click="handleDeliveryStatusChange(order.id, getNextDeliveryStatus(order.shipping?.deliveryStatus || 'Menunggu'))"
+                                                    @click.stop="handleDeliveryStatusChange(order.id, getNextDeliveryStatus(order.shipping?.deliveryStatus || 'Menunggu'))"
                                                     style="padding: 6px 16px; font-size: 12px; font-weight: 700; color: white; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s;"
                                                     :style="{
                                                         background: getNextDeliveryStatus(order.shipping?.deliveryStatus || 'Menunggu') === 'Selesai' ? '#22c55e' 
@@ -699,8 +775,17 @@ const getStatusLabel = (status) => {
 
                 <!-- Tab 2: Customers -->
                 <div v-if="activeTab === 'customers'" class="table-card">
-                    <div class="table-header">
+                    <div class="table-header" style="display: flex; justify-content: space-between; align-items: center;">
                         <h3 style="font-size:18px;">Manajemen Pelanggan</h3>
+                        <div style="display: flex; align-items: center; background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 4px 12px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            <input 
+                                type="text" 
+                                v-model="customerSearchQuery" 
+                                placeholder="Cari nama, email..." 
+                                style="border: none; outline: none; padding: 8px; font-size: 14px; width: 200px;"
+                            >
+                        </div>
                     </div>
                     <div class="table-responsive">
                         <table class="data-table">
@@ -713,15 +798,15 @@ const getStatusLabel = (status) => {
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="cust in customers" :key="cust.username">
+                                <tr v-for="cust in filteredCustomers" :key="cust.username">
                                     <td style="font-weight: 700;">{{ cust.name }}</td>
                                     <td>{{ cust.username }}</td>
                                     <td>{{ cust.email || '-' }}</td>
                                     <td>{{ cust.phone || '-' }}</td>
                                 </tr>
-                                <tr v-if="customers.length === 0">
+                                <tr v-if="filteredCustomers.length === 0">
                                     <td colspan="4" class="text-center text-muted" style="padding: 40px 0;">
-                                        Belum ada data customer terdaftar.
+                                        Belum ada data customer atau tidak ditemukan.
                                     </td>
                                 </tr>
                             </tbody>
@@ -754,6 +839,119 @@ const getStatusLabel = (status) => {
                         <button type="submit" class="btn btn-primary w-100">Kirim Barang</button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- Order Detail Modal -->
+        <div v-if="isOrderDetailModalOpen" class="d-flex" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; padding:16px;">
+            <div style="width:100%; max-width:600px; background: white; border-radius: 12px; overflow: hidden; animation: slideUp 0.3s forwards; display: flex; flex-direction: column; max-height: 90vh;">
+                <!-- Header -->
+                <div class="d-flex justify-between align-center" style="padding: 20px 24px; border-bottom: 1px solid #e2e8f0;">
+                    <h3 style="font-size: 18px; font-weight: 800; color: #0f172a; margin: 0;">Detail Transaksi ({{ selectedOrderDetail?.id }})</h3>
+                    <button @click="isOrderDetailModalOpen = false" style="background: none; border: none; cursor: pointer;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+                
+                <div style="padding: 24px; overflow-y: auto;">
+                    <!-- Section 1: Customer Info -->
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 16px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 16px; background: #f8fafc;">
+                        <div>
+                            <div style="font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Nama Pelanggan</div>
+                            <div style="font-size: 14px; font-weight: 700; color: #0f172a;">{{ selectedOrderDetail?.customer || '-' }}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 12px; color: #94a3b8; margin-bottom: 4px;">No HP / WhatsApp</div>
+                            <div style="font-size: 14px; font-weight: 700; color: #0f172a;">{{ selectedOrderDetail?.phone || '-' }}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Tanggal</div>
+                            <div style="font-size: 14px; font-weight: 700; color: #0f172a;">{{ selectedOrderDetail?.date ? formatDate(selectedOrderDetail.date) : '-' }}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Status</div>
+                            <span class="status-pill" :class="getStatusClass(selectedOrderDetail?.status)">{{ getStatusLabel(selectedOrderDetail?.status) }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Shipping Info -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 24px;">
+                        <div>
+                            <div style="font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Alamat Pengiriman</div>
+                            <div style="font-size: 14px; font-weight: 700; color: #0f172a;">{{ selectedOrderDetail?.address || '-' }}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 12px; color: #94a3b8; margin-bottom: 4px;">Metode Pengiriman</div>
+                            <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 4px;">{{ selectedOrderDetail?.shippingMethod || '-' }}</div>
+                            <div style="font-size: 12px; color: #0f172a;" v-if="selectedOrderDetail?.shipping?.waybillId">
+                                <strong>Resi:</strong> {{ selectedOrderDetail?.shipping?.waybillId }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Items -->
+                    <h4 style="font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 12px;">Daftar Item Dibeli</h4>
+                    <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+                        <table style="width: 100%; border-collapse: collapse;">
+                            <thead style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+                                <tr>
+                                    <th style="padding: 12px 16px; text-align: left; font-size: 12px; color: #64748b; font-weight: 700;">PRODUK</th>
+                                    <th style="padding: 12px 16px; text-align: left; font-size: 12px; color: #64748b; font-weight: 700;">VARIAN</th>
+                                    <th style="padding: 12px 16px; text-align: center; font-size: 12px; color: #64748b; font-weight: 700;">QTY</th>
+                                    <th style="padding: 12px 16px; text-align: right; font-size: 12px; color: #64748b; font-weight: 700;">SUBTOTAL</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-if="!selectedOrderDetail?.items || selectedOrderDetail.items.length === 0">
+                                    <td colspan="4" style="font-size: 14px; color: #94a3b8; text-align: center; padding: 20px;">
+                                        Data produk tidak tersedia
+                                    </td>
+                                </tr>
+                                <tr v-for="item in selectedOrderDetail?.items" :key="item.id" style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 16px; font-size: 14px; font-weight: 600; color: #0f172a;">{{ item.name }}</td>
+                                    <td style="padding: 16px; font-size: 14px; color: #64748b;">{{ item.color || '-' }}</td>
+                                    <td style="padding: 16px; font-size: 14px; font-weight: 700; color: #0f172a; text-align: center;">{{ item.qty }}</td>
+                                    <td style="padding: 16px; font-size: 14px; font-weight: 600; color: #0f172a; text-align: right;">{{ formatPrice(item.price * item.qty) }}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e2e8f0; background: #fafafa;">
+                                    <td colspan="3" style="padding: 16px; text-align: right; font-size: 14px; font-weight: 700; color: #0f172a;">Ongkos Kirim:</td>
+                                    <td style="padding: 16px; text-align: right; font-size: 14px; font-weight: 600; color: #64748b;">{{ formatPrice(selectedOrderDetail?.shipping?.shippingCost || 0) }}</td>
+                                </tr>
+                                <tr style="background: #fafafa;">
+                                    <td colspan="3" style="padding: 16px; text-align: right; font-size: 14px; font-weight: 800; color: #0f172a;">Total Tagihan:</td>
+                                    <td style="padding: 16px; text-align: right; font-size: 16px; font-weight: 800; color: #dc2626;">{{ formatPrice(selectedOrderDetail?.total || 0) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div v-if="selectedOrderDetail?.status?.toUpperCase() === 'SUCCESS' || selectedOrderDetail?.status?.toUpperCase() === 'VERIFIED'" style="padding: 16px 24px; border-top: 1px solid #e2e8f0; text-align: right; background: #f8fafc;">
+                    <template v-if="getShippingType(selectedOrderDetail?.shippingMethod) === 'kurir'">
+                        <button 
+                            @click="handleMarkShipping(selectedOrderDetail.id); isOrderDetailModalOpen = false"
+                            style="background: #e11d48; color: white; padding: 8px 24px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;"
+                        >
+                            Proses Pesanan & Kirim
+                        </button>
+                    </template>
+                    <template v-else-if="getShippingType(selectedOrderDetail?.shippingMethod) === 'ambil'">
+                        <button 
+                            @click="handleMarkCompleted(selectedOrderDetail.id); isOrderDetailModalOpen = false"
+                            style="background: #2563eb; color: white; padding: 8px 24px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;"
+                        >
+                            Selesai
+                        </button>
+                    </template>
+                    <template v-else-if="getShippingType(selectedOrderDetail?.shippingMethod) === 'toko'">
+                        <button 
+                            @click="activeTab = 'delivery'; isOrderDetailModalOpen = false"
+                            style="background: #ea580c; color: white; padding: 8px 24px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer;"
+                        >
+                            Atur Pengiriman
+                        </button>
+                    </template>
+                </div>
             </div>
         </div>
 

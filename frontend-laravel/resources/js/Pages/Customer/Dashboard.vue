@@ -3,6 +3,17 @@ import AppLayout from '@/Layouts/AppLayout.vue';
 import { useForm, Link, router } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 import { useAddresses } from '@/Composables/useAddresses';
+import { marked } from 'marked';
+
+marked.setOptions({
+    breaks: true,
+    gfm: true
+});
+
+const renderMarkdown = (text) => {
+    if (!text) return '';
+    return marked.parse(text);
+};
 
 const props = defineProps({
     orders: {
@@ -27,7 +38,17 @@ const { addresses: mockAddresses, addAddress, updateAddress, setMainAddress } = 
 
 const isModalOpen = ref(false);
 const selectedOrderId = ref('');
-const activeMenu = ref('alamat'); // 'alamat', 'pesanan', 'riwayat', or 'profile'
+const activeMenu = ref('alamat'); // 'alamat', 'pesanan', 'riwayat', 'profile', or 'chatbot'
+
+import { onMounted } from 'vue';
+
+onMounted(() => {
+    const params = new URLSearchParams(window.location.search);
+    const menuParam = params.get('menu');
+    if (menuParam) {
+        activeMenu.value = menuParam;
+    }
+});
 
 const isAddressFormModalOpen = ref(false);
 const addressFormMode = ref('add'); // 'add' or 'edit'
@@ -61,6 +82,43 @@ const addressForm = useForm({
     pinpoint: false,
     biteshipAreaId: '', // Added Biteship Area ID
 });
+
+const chatHistory = ref([]);
+const chatInput = ref('');
+const isChatLoading = ref(false);
+
+const sendChatMessage = async () => {
+    if (!chatInput.value.trim() || isChatLoading.value) return;
+
+    const userMessage = chatInput.value.trim();
+    chatHistory.value.push({ role: 'user', text: userMessage });
+    chatInput.value = '';
+    isChatLoading.value = true;
+
+    try {
+        const response = await fetch('http://localhost:8080/api/chatbot', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ history: chatHistory.value })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            chatHistory.value.push({ role: 'assistant', text: data.reply });
+        } else {
+            chatHistory.value.push({ role: 'assistant', text: 'Maaf, saya sedang tidak dapat terhubung dengan server saat ini.' });
+        }
+    } catch (e) {
+        console.error('Chat error:', e);
+        chatHistory.value.push({ role: 'assistant', text: 'Terjadi kesalahan jaringan, silakan coba lagi.' });
+    } finally {
+        isChatLoading.value = false;
+        // Scroll to bottom (handled via Vue reactivity in a robust app, but for now simple)
+    }
+};
 
 // Biteship autocomplete state
 const areaSearchQuery = ref('');
@@ -379,12 +437,27 @@ const handleUploadProof = () => {
                                     {{ $page.props.cartCount }}
                                 </div>
                             </Link>
+
+                            <!-- Chatbot -->
+                            <div 
+                                @click="activeMenu = 'chatbot'"
+                                style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-radius: 8px; cursor: pointer; transition: all 0.2s;"
+                                :style="activeMenu === 'chatbot' ? 'background: #ffe4e6; border-left: 4px solid #e11d48;' : 'border-left: 4px solid transparent;'"
+                            >
+                                <div style="display: flex; align-items: center;">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" :stroke="activeMenu === 'chatbot' ? '#e11d48' : '#64748b'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 12px;">
+                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                                    </svg>
+                                    <span :style="activeMenu === 'chatbot' ? 'color: #e11d48; font-weight: 700; font-size: 14px;' : 'color: #64748b; font-weight: 600; font-size: 14px;'">Chatbot Asisten</span>
+                                </div>
+                                <div v-if="activeMenu === 'chatbot'" style="width: 14px; height: 14px; background: #e11d48; border-radius: 50%;"></div>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Main Content -->
                     <div>
-                        <h3 class="section-title mb-6">{{ activeMenu === 'profile' ? 'Profil Saya' : activeMenu === 'riwayat' ? 'Riwayat Selesai' : activeMenu === 'alamat' ? 'Daftar Alamat' : 'Pesanan & Pengiriman' }}</h3>
+                        <h3 class="section-title mb-6">{{ activeMenu === 'profile' ? 'Profil Saya' : activeMenu === 'riwayat' ? 'Riwayat Selesai' : activeMenu === 'alamat' ? 'Daftar Alamat' : activeMenu === 'chatbot' ? 'Chatbot Konsultan Sinar Abadi' : 'Pesanan & Pengiriman' }}</h3>
 
                 <!-- Profil Saya Content -->
                 <div v-if="activeMenu === 'profile'" style="background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); padding: 24px;">
@@ -417,7 +490,7 @@ const handleUploadProof = () => {
                         </div>
                         <div class="form-group mb-6">
                             <label class="form-label" style="font-size: 14px; font-weight: 600; color: #475569; margin-bottom: 8px; display: block;">Password Baru <span style="font-weight: 400; color: #94a3b8;">(Kosongkan jika tidak ingin mengubah)</span></label>
-                            <input type="password" v-model="profileForm.password" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;" placeholder="Min. 3 karakter">
+                            <input type="password" v-model="profileForm.password" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;" placeholder="Min. 5 karakter">
                         </div>
                         
                         <button type="submit" style="padding: 12px 24px; background: #e11d48; color: white; border-radius: 8px; font-weight: 700; border: none; cursor: pointer;" :disabled="profileForm.processing">Simpan Perubahan</button>
@@ -749,6 +822,29 @@ const handleUploadProof = () => {
                     <Link v-if="activeMenu !== 'riwayat'" href="/katalog" class="btn btn-primary mt-4">Pesan Sekarang</Link>
                 </div>
                 </div> <!-- End v-else-if (pesanan/riwayat) -->
+                
+                <!-- Chatbot Content -->
+                <div v-else-if="activeMenu === 'chatbot'" style="background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); padding: 24px; display: flex; flex-direction: column; height: 600px;">
+                     <div style="flex: 1; overflow-y: auto; padding-right: 12px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 16px;" id="chatContainer">
+                         <div v-if="chatHistory.length === 0" style="text-align: center; color: #94a3b8; margin-top: 40px; margin-bottom: 20px;">
+                             <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 16px;"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                             <h4 style="font-size: 18px; font-weight: 800; color: #0f172a;">Halo! Saya Konsultan Proyek Sinar Abadi.</h4>
+                             <p style="font-size: 14px; max-width: 400px; margin: 0 auto; line-height: 1.5;">Tanyakan kebutuhan material bangunan Anda, dan saya akan merekomendasikan produk serta menghitung kebutuhan Anda.</p>
+                         </div>
+                         <div v-for="(msg, idx) in chatHistory" :key="idx" :style="{ alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%', background: msg.role === 'user' ? '#e11d48' : '#f8fafc', color: msg.role === 'user' ? 'white' : '#0f172a', padding: '14px 18px', borderRadius: '16px', borderBottomRightRadius: msg.role === 'user' ? '4px' : '16px', borderBottomLeftRadius: msg.role === 'assistant' ? '4px' : '16px', border: msg.role === 'assistant' ? '1px solid #e2e8f0' : 'none' }">
+                             <div :class="{ 'markdown-body': msg.role === 'assistant' }" :style="{ whiteSpace: msg.role === 'user' ? 'pre-wrap' : 'normal', fontSize: '14px', lineHeight: '1.6' }" v-html="msg.role === 'user' ? msg.text.replace(/\\n/g, '<br>') : renderMarkdown(msg.text)"></div>
+                         </div>
+                         <div v-if="isChatLoading" style="align-self: flex-start; background: #f8fafc; padding: 14px 18px; border-radius: 16px; border-bottom-left-radius: 4px; border: 1px solid #e2e8f0; color: #64748b; font-size: 14px; font-style: italic;">
+                             Sedang mengetik balasan...
+                         </div>
+                     </div>
+                     <form @submit.prevent="sendChatMessage" style="display: flex; gap: 12px; border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: auto;">
+                         <input v-model="chatInput" type="text" placeholder="Tanya sesuatu, misal: butuh berapa sak semen untuk ukuran 4x5 meter?" style="flex: 1; padding: 14px 16px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 14px; outline: none; transition: border-color 0.2s;" :disabled="isChatLoading" onfocus="this.style.borderColor='#e11d48'" onblur="this.style.borderColor='#cbd5e1'">
+                         <button type="submit" style="padding: 14px 28px; background: #e11d48; color: white; font-weight: 700; border-radius: 10px; border: none; cursor: pointer; transition: opacity 0.2s;" :disabled="isChatLoading || !chatInput.trim()" :style="{ opacity: isChatLoading || !chatInput.trim() ? 0.5 : 1 }">
+                             Kirim
+                         </button>
+                     </form>
+                </div>
                     </div> <!-- End Main Content -->
                 </div> <!-- End Grid Layout -->
             </div>
@@ -855,3 +951,44 @@ const handleUploadProof = () => {
         </div>
     </AppLayout>
 </template>
+
+<style scoped>
+:deep(.markdown-body p) {
+    margin-bottom: 0.5em;
+    margin-top: 0;
+}
+:deep(.markdown-body p:last-child) {
+    margin-bottom: 0;
+}
+:deep(.markdown-body ul) {
+    list-style-type: disc;
+    padding-left: 1.5em;
+    margin-bottom: 0.5em;
+}
+:deep(.markdown-body ol) {
+    list-style-type: decimal;
+    padding-left: 1.5em;
+    margin-bottom: 0.5em;
+}
+:deep(.markdown-body li) {
+    margin-bottom: 0.25em;
+}
+:deep(.markdown-body strong) {
+    font-weight: 700;
+}
+:deep(.markdown-body em) {
+    font-style: italic;
+}
+:deep(.markdown-body h1), :deep(.markdown-body h2), :deep(.markdown-body h3) {
+    font-weight: 700;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+}
+:deep(.markdown-body h1:first-child), :deep(.markdown-body h2:first-child), :deep(.markdown-body h3:first-child) {
+    margin-top: 0;
+}
+:deep(.markdown-body a) {
+    color: #2563eb;
+    text-decoration: underline;
+}
+</style>

@@ -170,8 +170,8 @@ class OwnerController extends Controller
     public function createAdmin(Request $request)
     {
         $request->validate([
-            'username' => 'required|string|min:3',
-            'password' => 'required|string|min:3',
+            'username' => 'required|string|min:5',
+            'password' => 'required|string|min:5',
             'name'     => 'required|string|min:2',
             'email'    => 'nullable|email',
             'phone'    => 'nullable|string',
@@ -212,7 +212,7 @@ class OwnerController extends Controller
             'name' => 'nullable|string',
             'email' => 'nullable|string',
             'phone' => 'nullable|string',
-            'password' => 'nullable|string|min:3',
+            'password' => 'nullable|string|min:5',
         ]);
 
         $data = [
@@ -339,7 +339,6 @@ class OwnerController extends Controller
             'minPurchase' => (int) $request->input('minPurchase', 1),
             'price'       => (int) $request->input('price'),
             'stock'       => (int) $request->input('stock'),
-            'isLarge'     => (bool) $request->input('isLarge', false),
             'img'         => $imgUrl,
         ]);
 
@@ -396,7 +395,6 @@ class OwnerController extends Controller
             'unit'        => $request->input('unit', ''),
             'minPurchase' => (int) $request->input('minPurchase', 1),
             'price'       => (int) $request->input('price'),
-            'isLarge'     => (bool) $request->input('isLarge', false),
             'img'         => $imgUrl,
         ]);
 
@@ -470,7 +468,7 @@ class OwnerController extends Controller
             'username' => 'required|string',
             'email' => 'nullable|string',
             'phone' => 'nullable|string',
-            'password' => 'nullable|string|min:3',
+            'password' => 'nullable|string|min:5',
         ]);
 
         $data = [

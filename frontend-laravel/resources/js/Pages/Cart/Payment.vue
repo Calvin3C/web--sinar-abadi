@@ -180,7 +180,7 @@ const fetchRates = async (addr) => {
                 name: item.name,
                 value: item.price,
                 quantity: item.qty,
-                weight: item.weight && item.weight > 0 ? item.weight : (item.isLarge ? 15000 : 2000),
+                weight: item.weight && item.weight > 0 ? item.weight : 2000,
                 length: item.length && item.length > 0 ? item.length : 1,
                 width: item.width && item.width > 0 ? item.width : 1,
                 height: item.height && item.height > 0 ? item.height : 1
@@ -657,7 +657,6 @@ const handleCheckout = async () => {
                                 <div style="font-weight: 700; font-size: 14px; color: #0f172a;">Kurir Toko Sinar Abadi</div>
                                 <div style="font-size: 13px; color: #64748b; margin-top: 4px;">Dikirim oleh armada toko kami ke desa tujuan.</div>
                                 
-                                <!-- Delivery Location Auto Match -->
                                 <div style="margin-top: 16px;">
                                     <div v-if="isFetchingLocations" style="font-size: 13px; color: #64748b; padding: 12px; text-align: center;">
                                         Memuat data lokasi...
@@ -672,6 +671,27 @@ const handleCheckout = async () => {
                                         <div style="font-size: 13px; color: #dc2626; font-weight: 600;">
                                             Untuk lokasi Anda saat ini belum bisa dikirim oleh kurir sinar abadi, mohon pilih metode pengiriman yang lain.
                                         </div>
+                                    </div>
+
+                                    <!-- Supported Delivery Areas Info -->
+                                    <div style="margin-top: 12px; font-size: 12px; color: #64748b; background: #f8fafc; padding: 10px 14px; border: 1px dashed #cbd5e1; border-radius: 6px;">
+                                        <strong style="color: #475569; display: block; margin-bottom: 8px;">Area Jangkauan Kurir Toko:</strong>
+                                        <ol style="margin: 0; padding-left: 24px; line-height: 1.6; column-count: 2; column-gap: 24px; list-style-type: decimal;">
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Dampit (Jambangan, Ngelak, Rembun)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Tirtoyudo (Kepatihan, Pujiharjo, Lenggoksono)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Wonoagung (Wonokitri)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Tamansari (Blubuk)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Kebonagung (Karangsono)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Gedangan (Sumber Gesing)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Srimulyo (Sumber Arum)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Ampelgading (Sono Wangi, Sono Sekar)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Sumbermanjing Wetan (Tambak Asri, Sido Asri)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Pamotan (Sumber Ayu)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Majangtengah (Lambang Kuning)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Sumberputih (Lambang Sari)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Wajak (Sumber Putih)</li>
+                                            <li style="break-inside: avoid; margin-bottom: 6px;">Turen (Kedok, Turen Pusat)</li>
+                                        </ol>
                                     </div>
                                 </div>
                             </template>

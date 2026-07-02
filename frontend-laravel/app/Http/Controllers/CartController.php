@@ -46,7 +46,6 @@ class CartController extends Controller
             'name'    => 'required|string',
             'price'   => 'required|numeric',
             'img'     => 'nullable|string',
-            'isLarge' => 'nullable',
             'weight'  => 'nullable|numeric',
             'length'  => 'nullable|numeric',
             'width'   => 'nullable|numeric',
@@ -59,8 +58,6 @@ class CartController extends Controller
 
         $cart = session('cart', []);
         $productId = $request->input('id');
-        $isLarge = in_array($request->input('isLarge'), ['1', 'true', true, 1], true)
-                || $request->input('isLarge') === true;
         
         $requestedQty = (int) $request->input('qty', 1);
         $color = $request->input('color');
@@ -81,7 +78,6 @@ class CartController extends Controller
                 'name'    => $request->input('name'),
                 'price'   => (int) $request->input('price'),
                 'img'     => $request->input('img', ''),
-                'isLarge' => $isLarge,
                 'weight'  => (int) $request->input('weight', 0),
                 'length'  => (int) $request->input('length', 1),
                 'width'   => (int) $request->input('width', 1),
@@ -166,7 +162,6 @@ class CartController extends Controller
 
         $cart = session('cart', []);
         $totalQty = collect($cart)->sum('qty');
-        $hasLargeItem = collect($cart)->some(fn($item) => $item['isLarge'] === true);
 
         // Simple shipping rates calculation
         $baseRate = 15000;
@@ -177,14 +172,11 @@ class CartController extends Controller
         }
 
         $cost = $baseRate + ($totalQty * 4000);
-        if ($hasLargeItem) {
-            $cost += 50000; // Extra heavy charge
-        }
 
         // Mock total weight (each item approx 2kg, large items 15kg)
         $weight = 0;
         foreach ($cart as $item) {
-            $weight += $item['qty'] * ($item['isLarge'] ? 15 : 2);
+            $weight += $item['qty'] * ($item['weight'] > 0 ? $item['weight'] / 1000 : 2);
         }
 
         session([
@@ -215,7 +207,7 @@ class CartController extends Controller
                 'address' => '',
                 'phone' => '',
                 'cost' => 0,
-                'totalWeight' => collect($cart)->sum(fn($i) => $i['qty'] * ($i['isLarge'] ? 15 : 2)),
+                'totalWeight' => collect($cart)->sum(fn($i) => $i['qty'] * ($i['weight'] > 0 ? $i['weight'] / 1000 : 2)),
             ];
         }
 
@@ -383,7 +375,6 @@ class CartController extends Controller
         if ($logistic && $logistic['address']) {
             $cart = session('cart', []);
             $totalQty = collect($cart)->sum('qty');
-            $hasLargeItem = collect($cart)->some(fn($item) => $item['isLarge'] === true);
 
             $baseRate = 15000;
             if ($logistic['courier'] === 'JNE') {
@@ -393,13 +384,10 @@ class CartController extends Controller
             }
 
             $cost = $baseRate + ($totalQty * 4000);
-            if ($hasLargeItem) {
-                $cost += 50000;
-            }
 
             $weight = 0;
             foreach ($cart as $item) {
-                $weight += $item['qty'] * ($item['isLarge'] ? 15 : 2);
+                $weight += $item['qty'] * ($item['weight'] > 0 ? $item['weight'] / 1000 : 2);
             }
 
             $logistic['cost'] = $cost;
