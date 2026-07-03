@@ -810,7 +810,7 @@ const handleDeleteAdmin = (adminUsername) => {
                                 </div>
                                 <div class="form-group mb-6">
                                     <label class="form-label" style="font-size: 14px; font-weight: 600; color: #475569; margin-bottom: 8px; display: block;">Password Baru <span style="font-weight: 400; color: #94a3b8;">(Kosongkan jika tidak ingin mengubah)</span></label>
-                                    <input type="password" v-model="profileForm.password" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;" placeholder="Min. 5 karakter">
+                                    <input type="password" v-model="profileForm.password" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;" placeholder="Min. 5 karakter" minlength="5">
                                 </div>
                                 
                                 <button type="submit" style="padding: 12px 24px; background: #e11d48; color: white; border-radius: 8px; font-weight: 700; border: none; cursor: pointer;" :disabled="profileForm.processing">Simpan Perubahan</button>
@@ -1654,7 +1654,7 @@ const handleDeleteAdmin = (adminUsername) => {
                     </div>
                     <div class="form-group mb-6">
                         <label class="form-label">Password Baru <span style="font-weight: 400; color: #94a3b8; font-size: 12px;">(Kosongkan jika tak diubah)</span></label>
-                        <input type="password" class="form-input" v-model="editAdminForm.password" placeholder="Min. 5 karakter">
+                        <input type="password" class="form-input" v-model="editAdminForm.password" placeholder="Min. 5 karakter" minlength="5">
                     </div>
                     <div class="d-flex justify-between gap-4">
                         <button type="button" @click="isEditAdminModalOpen = false" class="btn btn-outline w-100">Batal</button>
@@ -1687,7 +1687,7 @@ const handleDeleteAdmin = (adminUsername) => {
                     </div>
                     <div class="form-group mb-6">
                         <label class="form-label">Password</label>
-                        <input type="password" class="form-input" v-model="newAdminForm.password" placeholder="Min. 5 karakter" required>
+                        <input type="password" class="form-input" v-model="newAdminForm.password" placeholder="Min. 5 karakter" minlength="5" required>
                     </div>
                     <div class="d-flex justify-between gap-4">
                         <button type="button" @click="isCreateAdminModalOpen = false" class="btn btn-outline w-100">Batal</button>

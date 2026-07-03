@@ -464,7 +464,7 @@ const isCheckoutDisabled = computed(() => {
     const kurirNoLocation = activeTab.value === 'kurir' && !selectedDeliveryLocation.value;
     const kurirInvalidFleet = activeTab.value === 'kurir' && 
         ((selectedFleetType.value === 'mobil' && subtotal.value < 1000000) || 
-         (selectedFleetType.value === 'motor' && (subtotal.value < 500000 || selectedDeliveryLocation.value?.distanceKm > 2 || totalWeightKg.value > 80)));
+         (selectedFleetType.value === 'motor' && (subtotal.value < 500000 || selectedDeliveryLocation.value?.distanceKm > 2 || totalWeightKg.value > 120)));
     
     const processing = checkoutForm.processing || isProcessingMidtrans.value;
     
@@ -682,6 +682,33 @@ const handleCheckout = async () => {
                                 <div style="font-weight: 700; font-size: 14px; color: #0f172a;">Kurir Toko Sinar Abadi</div>
                                 <div style="font-size: 13px; color: #64748b; margin-top: 4px;">Dikirim oleh armada toko kami ke desa tujuan.</div>
                                 
+                                <!-- Supported Delivery Areas Info -->
+                                <div style="margin-top: 12px; font-size: 11px; color: #64748b; background: #f8fafc; padding: 10px 14px; border: 1px dashed #cbd5e1; border-radius: 6px;">
+                                    <strong style="color: #475569; display: block; margin-bottom: 8px; font-size: 12px;">Area Jangkauan Kurir Toko:</strong>
+                                    <ul style="margin: 0; padding-left: 20px; line-height: 1.5; column-count: 2; column-gap: 24px; list-style-type: disc;">
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Kepatihan (Tirtoyudo): ± 18,4 km (42 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Desa Jambangan (Dampit): ± 8,1 km (17 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Desa Ngelak (Dampit): ± 800 m (3 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Desa Wonokitri (Wonoagung): ± 6 km (16 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Blubuk (Tamansari): ± 19 km (41 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Karangsono (Kebonagung): ± 32,4 km (1 jam 9 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Sumber Gesing (Gedangan): ± 21,2 km (47 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Sumber Arum (Srimulyo): ± 15,3 km (40 menit) – Diukur ke arah pusat desa Srimulyo.</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Sono Wangi (Ampelgading): ± 21,7 km (46 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Sono Sekar (Ampelgading): ± 18 km (38 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Pujiharjo (Tirtoyudo): ± 38,1 km (1 jam 28 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Tambak Asri (Sumbermanjing Wetan): ± 26,6 km (1 jam 6 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Sido Asri (Sumbermanjing Wetan): ± 27,8 km (1 jam 11 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Lenggoksono (Purwodadi, Tirtoyudo): ± 30–35 km – Rute langsung via mobil tidak terdeteksi sepenuhnya di peta digital, namun area Pantai Lenggoksono berjarak sekitar 1,5 jam perjalanan ke arah selatan.</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Sumber Ayu (Pamotan): ± 3 km (9 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Rembun (Dampit): ± 8,4 km (20 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Lambang Kuning (Majangtengah): ± 5,4 km (14 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Lambang Sari (Sumberputih): ± 9,7 km (20 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Sumber Putih (Wajak/Dampit): ± 9,9 km (23 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Kedok (Turen): ± 14,3 km (30 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Turen: ± 11,4 km (25 menit)</li>
+                                    </ul>
+                                </div>
                                 <!-- Fleet Selection -->
                                 <div style="margin-top: 16px; display: flex; gap: 12px;">
                                     <label 
@@ -715,8 +742,8 @@ const handleCheckout = async () => {
                                 <div v-if="selectedFleetType === 'motor' && selectedDeliveryLocation && selectedDeliveryLocation.distanceKm > 2" style="margin-top: 8px; font-size: 12px; color: #dc2626; font-weight: 600;">
                                     * Jarak lokasi Anda ({{ selectedDeliveryLocation.distanceKm }} km) melebihi batas maksimal pengiriman motor (2 km).
                                 </div>
-                                <div v-if="selectedFleetType === 'motor' && totalWeightKg > 80" style="margin-top: 8px; font-size: 12px; color: #dc2626; font-weight: 600;">
-                                    * Total berat pesanan Anda ({{ totalWeightKg }} kg) melebihi kapasitas motor (80 kg).
+                                <div v-if="selectedFleetType === 'motor' && totalWeightKg > 120" style="margin-top: 8px; font-size: 12px; color: #dc2626; font-weight: 600;">
+                                    * Total berat pesanan Anda ({{ totalWeightKg }} kg) melebihi kapasitas motor (120 kg).
                                 </div>
 
 
