@@ -254,7 +254,7 @@ const handleDeliveryStatusChange = (order, newStatus) => {
     if (newStatus === 'Dikirim') {
         // Open vehicle selection modal
         vehicleOrderId.value = order.id;
-        vehicleOrderCourier.value = order.shipping?.courier || '';
+        vehicleOrderCourier.value = order.shippingMethod || order.shipping?.courier || '';
         selectedVehicleId.value = null;
         isVehicleModalOpen.value = true;
         return;
@@ -289,8 +289,8 @@ const availableVehicles = computed(() => {
 const isVehicleLocked = (vehicle) => {
     if (vehicle.status !== 'Tersedia') return true;
     
-    const isOrderMotor = vehicleOrderCourier.value.includes('Motor');
-    const isVehicleMotor = vehicle.name.includes('Motor') || vehicle.name.includes('Scoopy');
+    const isOrderMotor = (vehicleOrderCourier.value || '').toLowerCase().includes('motor');
+    const isVehicleMotor = (vehicle.name || '').toLowerCase().includes('motor') || (vehicle.name || '').toLowerCase().includes('scoopy');
     
     if (isOrderMotor && !isVehicleMotor) return true; // Pesanan motor, kendaraan mobil
     if (!isOrderMotor && isVehicleMotor) return true; // Pesanan mobil, kendaraan motor
