@@ -71,7 +71,10 @@ func main() {
 		// Calculate weight in grams
 		weightGrams := int(weightKg * 1000)
 		if weightGrams == 0 {
-			weightGrams = 2000 // 2kg default
+			weightGrams = p.Weight // Keep existing weight from database/seeder
+		}
+		if weightGrams == 0 {
+			weightGrams = 2000 // 2kg default fallback only if it was originally 0
 		}
 
 		// Extract Brand from first word of name
