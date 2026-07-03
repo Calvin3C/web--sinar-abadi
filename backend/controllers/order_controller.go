@@ -290,7 +290,7 @@ func CreateOrder(c *gin.Context) {
 
 	// We trust the frontend shippingCost if it's Biteship, otherwise calculate standard
 	shippingCost := input.ShippingCost
-	if input.BiteshipAreaID == "" && input.ShippingMethod != "Ambil Di Toko" && input.ShippingMethod != "Kurir Toko Sinar Abadi" {
+	if input.BiteshipAreaID == "" && input.ShippingMethod != "Ambil Di Toko" && !strings.HasPrefix(input.ShippingMethod, "Kurir Toko Sinar Abadi") {
 		var err error
 		shippingCost, err = logisticsSvc.CalculateShippingCost(input.ShippingMethod, input.Address, orderItems)
 		if err != nil {
@@ -298,9 +298,9 @@ func CreateOrder(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-	} else if input.ShippingMethod == "Kurir Toko Sinar Abadi" {
-		// Lookup shipping cost from delivery location
-		if input.DeliveryLocationID != nil {
+	} else if strings.HasPrefix(input.ShippingMethod, "Kurir Toko Sinar Abadi") {
+		// For Motor, trust the frontend calculation, for Mobil use lookup if available
+		if input.DeliveryLocationID != nil && input.ShippingMethod != "Kurir Toko Sinar Abadi - Motor" {
 			cost, err := services.LookupDeliveryLocationCost(*input.DeliveryLocationID)
 			if err != nil {
 				tx.Rollback()

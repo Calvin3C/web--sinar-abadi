@@ -422,7 +422,7 @@ const markInboundReceived = (id) => {
 };
 
 const markInboundCancelled = (id) => {
-    if (confirm('Yakin ingin membatalkan pesanan kulakan ini?')) {
+    if (confirm('Yakin ingin membatalkan pesanan barang datang ini?')) {
         router.put(`/owner/inbounds/${id}/status`, { status: 'cancelled' }, { preserveScroll: true });
     }
 };
@@ -810,7 +810,7 @@ const handleDeleteAdmin = (adminUsername) => {
                                 </div>
                                 <div class="form-group mb-6">
                                     <label class="form-label" style="font-size: 14px; font-weight: 600; color: #475569; margin-bottom: 8px; display: block;">Password Baru <span style="font-weight: 400; color: #94a3b8;">(Kosongkan jika tidak ingin mengubah)</span></label>
-                                    <input type="password" v-model="profileForm.password" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;" placeholder="Min. 5 karakter">
+                                    <input type="password" v-model="profileForm.password" style="width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px;" placeholder="Min. 5 karakter" minlength="5">
                                 </div>
                                 
                                 <button type="submit" style="padding: 12px 24px; background: #e11d48; color: white; border-radius: 8px; font-weight: 700; border: none; cursor: pointer;" :disabled="profileForm.processing">Simpan Perubahan</button>
@@ -1040,7 +1040,7 @@ const handleDeleteAdmin = (adminUsername) => {
                     <div v-else-if="warehouseTab === 'inbound'">
                         <div class="table-header" style="flex-direction: column; gap: 16px;">
                             <div class="d-flex justify-between align-center w-100">
-                                <h3 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 0;">Logistik Masuk (Inbound Kulakan)</h3>
+                                <h3 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 0;">Logistik Masuk (Inbound Barang Datang)</h3>
                             </div>
                             <div class="d-flex justify-between align-center w-100" style="gap: 12px; flex-wrap: wrap;">
                                 <div class="d-flex gap-4 flex-wrap" style="flex: 1;">
@@ -1058,7 +1058,7 @@ const handleDeleteAdmin = (adminUsername) => {
                                     </div>
                                 </div>
                                 <div class="d-flex gap-2">
-                                    <button @click="openInboundModal" class="btn btn-primary">+ Tambah Kulakan Baru</button>
+                                    <button @click="openInboundModal" class="btn btn-primary">+ Tambah Barang Datang Baru</button>
                                 </div>
                             </div>
                         </div>
@@ -1097,7 +1097,7 @@ const handleDeleteAdmin = (adminUsername) => {
                                         </td>
                                     </tr>
                                     <tr v-if="!filteredInbounds || filteredInbounds.length === 0">
-                                        <td colspan="6" class="text-center text-muted" style="padding: 40px 0;">Tidak ada pesanan kulakan yang sesuai dengan pencarian Anda.</td>
+                                        <td colspan="6" class="text-center text-muted" style="padding: 40px 0;">Tidak ada pesanan barang datang yang sesuai dengan pencarian Anda.</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1654,7 +1654,7 @@ const handleDeleteAdmin = (adminUsername) => {
                     </div>
                     <div class="form-group mb-6">
                         <label class="form-label">Password Baru <span style="font-weight: 400; color: #94a3b8; font-size: 12px;">(Kosongkan jika tak diubah)</span></label>
-                        <input type="password" class="form-input" v-model="editAdminForm.password" placeholder="Min. 5 karakter">
+                        <input type="password" class="form-input" v-model="editAdminForm.password" placeholder="Min. 5 karakter" minlength="5">
                     </div>
                     <div class="d-flex justify-between gap-4">
                         <button type="button" @click="isEditAdminModalOpen = false" class="btn btn-outline w-100">Batal</button>
@@ -1687,7 +1687,7 @@ const handleDeleteAdmin = (adminUsername) => {
                     </div>
                     <div class="form-group mb-6">
                         <label class="form-label">Password</label>
-                        <input type="password" class="form-input" v-model="newAdminForm.password" placeholder="Min. 5 karakter" required>
+                        <input type="password" class="form-input" v-model="newAdminForm.password" placeholder="Min. 5 karakter" minlength="5" required>
                     </div>
                     <div class="d-flex justify-between gap-4">
                         <button type="button" @click="isCreateAdminModalOpen = false" class="btn btn-outline w-100">Batal</button>
@@ -1750,7 +1750,7 @@ const handleDeleteAdmin = (adminUsername) => {
         <!-- Inbound Modal -->
         <div v-if="isInboundModalOpen" class="d-flex" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; padding:16px;">
             <div class="table-card" style="width:100%; max-width:800px; padding:32px; animation: slideUp 0.3s forwards; max-height: 90vh; overflow-y: auto;">
-                <h3 class="mb-4">Buat Purchase Order (Kulakan) Baru</h3>
+                <h3 class="mb-4">Buat Purchase Order (Barang Datang) Baru</h3>
                 <form @submit.prevent="submitInbound">
                     <div class="d-flex gap-4 mb-4">
                         <div class="form-group" style="flex: 1;">

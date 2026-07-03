@@ -105,7 +105,7 @@ type UpdateAdminInput struct {
 	Name     string `json:"name"`
 	Phone    string `json:"phone"`
 	Email    string `json:"email"`
-	Password string `json:"password"`
+	Password string `json:"password" binding:"omitempty,min=5"`
 }
 
 // UpdateAdmin updates an admin profile by Owner. Owner only.
@@ -153,7 +153,7 @@ func UpdateAdmin(c *gin.Context) {
 // CreateAdminInput represents the request body for creating a new admin.
 type CreateAdminInput struct {
 	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Password string `json:"password" binding:"required,min=5"`
 	Name     string `json:"name" binding:"required"`
 	Email    string `json:"email"`
 	Phone    string `json:"phone"`
@@ -253,7 +253,7 @@ type UpdateProfileInput struct {
 	Username string `json:"username" binding:"required"`
 	Email    string `json:"email"`
 	Phone    string `json:"phone"`
-	Password string `json:"password"`
+	Password string `json:"password" binding:"omitempty,min=5"`
 }
 
 // UpdateProfile updates the authenticated user's profile.

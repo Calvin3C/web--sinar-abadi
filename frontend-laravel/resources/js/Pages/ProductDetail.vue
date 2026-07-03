@@ -35,7 +35,7 @@ let unit = props.product.unit || '';
 if (!props.product.unit) {
     unit = 'Pcs';
     if (isSemen) {
-        minPurchase = 10;
+        minPurchase = 1;
         unit = 'Sak';
     } else if (isCat) {
         if (weightKg >= 1 && weightKg <= 5) {
@@ -89,6 +89,17 @@ const decreaseQty = () => {
 
 const increaseQty = () => {
     if (quantity.value < props.product.stock) quantity.value++;
+};
+
+const handleQtyChange = () => {
+    let val = parseInt(quantity.value);
+    if (isNaN(val) || val < minPurchase) {
+        quantity.value = minPurchase;
+    } else if (val > props.product.stock) {
+        quantity.value = props.product.stock;
+    } else {
+        quantity.value = val;
+    }
 };
 
 const formatPrice = (price) => {
@@ -376,10 +387,6 @@ const selectedColor = ref(currentColors.value.length > 0 ? currentColors.value[0
 
                 <!-- Kanan: Keranjang -->
                 <div class="detail-right">
-                    <div class="promo-box mb-4">
-                        <div style="font-weight: 600; color: #0f172a;">Potensi Harga Terbaik</div>
-                        <div style="font-size: 13px; color: #475569;">Beli lebih banyak, hemat ongkir!</div>
-                    </div>
 
                     <div class="card">
                         <h3 style="font-size: 18px; margin-bottom: 8px;">Subtotal</h3>
@@ -389,7 +396,7 @@ const selectedColor = ref(currentColors.value.length > 0 ? currentColors.value[0
                         
                         <div class="qty-control">
                             <button class="qty-btn" @click="decreaseQty" :disabled="quantity <= minPurchase">-</button>
-                            <input type="number" class="qty-input" v-model.number="quantity" :min="minPurchase" :max="product.stock" readonly>
+                            <input type="number" class="qty-input" v-model.number="quantity" :min="minPurchase" :max="product.stock" @change="handleQtyChange" @blur="handleQtyChange">
                             <span style="padding-right: 8px; color: #475569; font-weight: 500;">x {{ unit }}</span>
                             <button class="qty-btn" @click="increaseQty" :disabled="quantity >= product.stock">+</button>
                         </div>

@@ -28,6 +28,7 @@ const { addresses: mockAddresses, addAddress, updateAddress } = useAddresses(pro
 const isAddressModalOpen = ref(false);
 const isEditAddressModalOpen = ref(false);
 const activeTab = ref('semua');
+const selectedFleetType = ref('mobil'); // 'mobil' or 'motor'
 
 const storeAddress = {
     id: 99,
@@ -180,7 +181,7 @@ const fetchRates = async (addr) => {
                 name: item.name,
                 value: item.price,
                 quantity: item.qty,
-                weight: item.weight && item.weight > 0 ? item.weight : 2000,
+                weight: item.weight && item.weight > 0 ? item.weight : (item.isLarge ? 15000 : 2000),
                 length: item.length && item.length > 0 ? item.length : 1,
                 width: item.width && item.width > 0 ? item.width : 1,
                 height: item.height && item.height > 0 ? item.height : 1
@@ -223,7 +224,7 @@ const selectAddress = async (addr) => {
         selectedDeliveryLocation.value = null;
         checkoutForm.delivery_location_id = null;
     } else if (activeTab.value === 'kurir') {
-        checkoutForm.courier = 'Kurir Toko Sinar Abadi';
+        checkoutForm.courier = selectedFleetType.value === 'motor' ? 'Kurir Toko Sinar Abadi - Motor' : 'Kurir Toko Sinar Abadi - Mobil';
         selectedRate.value = null;
         checkDeliveryLocationMatch();
     } else {
@@ -251,6 +252,12 @@ watch(activeTab, (newTab) => {
             return;
         }
         selectAddress(selectedAddress.value.id === 99 ? mockAddresses.value[0] : selectedAddress.value);
+    }
+});
+
+watch(selectedFleetType, (newVal) => {
+    if (activeTab.value === 'kurir') {
+        checkoutForm.courier = newVal === 'motor' ? 'Kurir Toko Sinar Abadi - Motor' : 'Kurir Toko Sinar Abadi - Mobil';
     }
 });
 
@@ -399,6 +406,7 @@ const openEditAddress = (addr) => {
     addressForm.pinpoint = addr.pinpoint || false;
     addressForm.biteshipAreaId = addr.biteshipAreaId || '';
     addressForm.postalCode = addr.postalCode || '';
+    isSelectingArea.value = true;
     areaSearchQuery.value = addr.kota || '';
     isEditAddressModalOpen.value = true;
 };
@@ -416,6 +424,13 @@ const subtotal = computed(() => {
     return props.cartItems.reduce((acc, item) => acc + (item.price * item.qty), 0);
 });
 
+const totalWeightKg = computed(() => {
+    return props.cartItems.reduce((acc, item) => {
+        const w = item.weight && item.weight > 0 ? item.weight : 2000; // Default 2kg/item
+        return acc + (w * item.qty);
+    }, 0) / 1000;
+});
+
 // PPN calculation if needed, for now just matching UI
 const ppn = computed(() => {
     return subtotal.value * 0.11;
@@ -426,6 +441,12 @@ const currentShippingCost = computed(() => {
         return selectedRate.value.price;
     }
     if (activeTab.value === 'kurir' && selectedDeliveryLocation.value) {
+        if (selectedFleetType.value === 'motor') {
+            const distance = selectedDeliveryLocation.value.distanceKm;
+            if (distance <= 1) return 15000;
+            if (distance <= 1.5) return 20000;
+            return 25000;
+        }
         return selectedDeliveryLocation.value.shippingCost;
     }
     if (activeTab.value === 'ambil') {
@@ -441,13 +462,17 @@ const grandTotal = computed(() => {
 const isCheckoutDisabled = computed(() => {
     const courierNotReady = activeTab.value === 'semua' && !selectedRate.value;
     const kurirNoLocation = activeTab.value === 'kurir' && !selectedDeliveryLocation.value;
+    const kurirInvalidFleet = activeTab.value === 'kurir' && 
+        ((selectedFleetType.value === 'mobil' && subtotal.value < 1000000) || 
+         (selectedFleetType.value === 'motor' && (subtotal.value < 500000 || selectedDeliveryLocation.value?.distanceKm > 2 || totalWeightKg.value > 120)));
+    
     const processing = checkoutForm.processing || isProcessingMidtrans.value;
     
     if (selectedPaymentMethod.value.startsWith('midtrans')) {
-        return processing || courierNotReady || kurirNoLocation;
+        return processing || courierNotReady || kurirNoLocation || kurirInvalidFleet;
     }
     // Manual: also need proof
-    return processing || !checkoutForm.proof || courierNotReady || kurirNoLocation;
+    return processing || !checkoutForm.proof || courierNotReady || kurirNoLocation || kurirInvalidFleet;
 });
 
 const handleCheckout = async () => {
@@ -626,7 +651,7 @@ const handleCheckout = async () => {
                                         <template v-if="checkoutForm.courier === 'Ambil Di Toko'">
                                             <span style="font-weight: 700; color: #0f172a; font-size: 14px;">Ambil Di Toko</span>
                                         </template>
-                                        <template v-else-if="checkoutForm.courier === 'Kurir Toko Sinar Abadi'">
+                                        <template v-else-if="checkoutForm.courier.includes('Kurir Toko Sinar Abadi')">
                                             <span style="font-weight: 700; color: #0f172a; font-size: 14px;">Kurir Sinar Abadi - {{ selectedAddress.name }}</span>
                                         </template>
                                         <template v-else>
@@ -653,45 +678,92 @@ const handleCheckout = async () => {
                                 <div style="font-weight: 700; font-size: 14px; color: #0f172a;">Ambil Di Toko</div>
                                 <div style="font-size: 13px; color: #64748b; margin-top: 4px;">Barang diambil sendiri di toko Sinar Abadi. (Gratis)</div>
                             </template>
-                            <template v-else-if="checkoutForm.courier === 'Kurir Toko Sinar Abadi'">
+                            <template v-else-if="checkoutForm.courier.includes('Kurir Toko Sinar Abadi')">
                                 <div style="font-weight: 700; font-size: 14px; color: #0f172a;">Kurir Toko Sinar Abadi</div>
                                 <div style="font-size: 13px; color: #64748b; margin-top: 4px;">Dikirim oleh armada toko kami ke desa tujuan.</div>
                                 
+                                <!-- Supported Delivery Areas Info -->
+                                <div style="margin-top: 12px; font-size: 11px; color: #64748b; background: #f8fafc; padding: 10px 14px; border: 1px dashed #cbd5e1; border-radius: 6px;">
+                                    <strong style="color: #475569; display: block; margin-bottom: 8px; font-size: 12px;">Area Jangkauan Kurir Toko:</strong>
+                                    <ul style="margin: 0; padding-left: 20px; line-height: 1.5; column-count: 2; column-gap: 24px; list-style-type: disc;">
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Kepatihan (Tirtoyudo): ± 18,4 km (42 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Desa Jambangan (Dampit): ± 8,1 km (17 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Desa Ngelak (Dampit): ± 800 m (3 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Desa Wonokitri (Wonoagung): ± 6 km (16 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Blubuk (Tamansari): ± 19 km (41 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Karangsono (Kebonagung): ± 32,4 km (1 jam 9 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Sumber Gesing (Gedangan): ± 21,2 km (47 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Sumber Arum (Srimulyo): ± 15,3 km (40 menit) – Diukur ke arah pusat desa Srimulyo.</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Sono Wangi (Ampelgading): ± 21,7 km (46 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Sono Sekar (Ampelgading): ± 18 km (38 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Pujiharjo (Tirtoyudo): ± 38,1 km (1 jam 28 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Tambak Asri (Sumbermanjing Wetan): ± 26,6 km (1 jam 6 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Sido Asri (Sumbermanjing Wetan): ± 27,8 km (1 jam 11 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Lenggoksono (Purwodadi, Tirtoyudo): ± 30–35 km – Rute langsung via mobil tidak terdeteksi sepenuhnya di peta digital, namun area Pantai Lenggoksono berjarak sekitar 1,5 jam perjalanan ke arah selatan.</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Sumber Ayu (Pamotan): ± 3 km (9 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Rembun (Dampit): ± 8,4 km (20 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Lambang Kuning (Majangtengah): ± 5,4 km (14 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Lambang Sari (Sumberputih): ± 9,7 km (20 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Sumber Putih (Wajak/Dampit): ± 9,9 km (23 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Kedok (Turen): ± 14,3 km (30 menit)</li>
+                                        <li style="break-inside: avoid; margin-bottom: 4px;">Turen: ± 11,4 km (25 menit)</li>
+                                    </ul>
+                                </div>
+                                <!-- Fleet Selection -->
+                                <div style="margin-top: 16px; display: flex; gap: 12px;">
+                                    <label 
+                                        style="flex: 1; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px;"
+                                        :style="selectedFleetType === 'mobil' ? { borderColor: '#e11d48', background: '#fff1f2' } : { background: 'white' }"
+                                    >
+                                        <input type="radio" v-model="selectedFleetType" value="mobil" style="accent-color: #e11d48;">
+                                        <div>
+                                            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Mobil (Barang Berat)</div>
+                                            <div style="font-size: 11px; color: #64748b;">Min. belanja Rp 1.000.000</div>
+                                        </div>
+                                    </label>
+                                    <label 
+                                        style="flex: 1; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px;"
+                                        :style="selectedFleetType === 'motor' ? { borderColor: '#e11d48', background: '#fff1f2' } : { background: 'white' }"
+                                    >
+                                        <input type="radio" v-model="selectedFleetType" value="motor" style="accent-color: #e11d48;">
+                                        <div>
+                                            <div style="font-weight: 700; font-size: 13px; color: #0f172a;">Motor (Barang Ringan)</div>
+                                            <div style="font-size: 11px; color: #64748b;">Min. belanja Rp 500.000, Maks 2 km.</div>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <div v-if="selectedFleetType === 'mobil' && subtotal < 1000000" style="margin-top: 8px; font-size: 12px; color: #dc2626; font-weight: 600;">
+                                    * Pembelian minimal Rp 1.000.000 untuk pengiriman mobil.
+                                </div>
+                                <div v-if="selectedFleetType === 'motor' && subtotal < 500000" style="margin-top: 8px; font-size: 12px; color: #dc2626; font-weight: 600;">
+                                    * Pembelian minimal Rp 500.000 untuk pengiriman motor.
+                                </div>
+                                <div v-if="selectedFleetType === 'motor' && selectedDeliveryLocation && selectedDeliveryLocation.distanceKm > 2" style="margin-top: 8px; font-size: 12px; color: #dc2626; font-weight: 600;">
+                                    * Jarak lokasi Anda ({{ selectedDeliveryLocation.distanceKm }} km) melebihi batas maksimal pengiriman motor (2 km).
+                                </div>
+                                <div v-if="selectedFleetType === 'motor' && totalWeightKg > 120" style="margin-top: 8px; font-size: 12px; color: #dc2626; font-weight: 600;">
+                                    * Total berat pesanan Anda ({{ totalWeightKg }} kg) melebihi kapasitas motor (120 kg).
+                                </div>
+
+
                                 <div style="margin-top: 16px;">
                                     <div v-if="isFetchingLocations" style="font-size: 13px; color: #64748b; padding: 12px; text-align: center;">
                                         Memuat data lokasi...
                                     </div>
                                     <div v-else-if="selectedDeliveryLocation" style="padding: 10px 14px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px;">
-                                        <div style="font-size: 12px; color: #166534; font-weight: 600;">Tujuan dikenali: <strong>{{ selectedDeliveryLocation.name }}</strong></div>
+                                        <div style="font-size: 12px; color: #166534; font-weight: 600;">
+                                            Tujuan dikenali: <strong>{{ selectedDeliveryLocation.name }}</strong> 
+                                            <span v-if="selectedDeliveryLocation.distanceKm">({{ selectedDeliveryLocation.distanceKm }} km)</span>
+                                        </div>
                                         <div style="font-size: 13px; color: #166534; font-weight: 800; margin-top: 2px;">
-                                            Ongkir: {{ selectedDeliveryLocation.shippingCost === 0 ? 'GRATIS' : formatPrice(selectedDeliveryLocation.shippingCost) }}
+                                            Ongkir: {{ currentShippingCost === 0 ? 'GRATIS' : formatPrice(currentShippingCost) }}
                                         </div>
                                     </div>
                                     <div v-else style="padding: 10px 14px; background: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px;">
                                         <div style="font-size: 13px; color: #dc2626; font-weight: 600;">
                                             Untuk lokasi Anda saat ini belum bisa dikirim oleh kurir sinar abadi, mohon pilih metode pengiriman yang lain.
                                         </div>
-                                    </div>
-
-                                    <!-- Supported Delivery Areas Info -->
-                                    <div style="margin-top: 12px; font-size: 12px; color: #64748b; background: #f8fafc; padding: 10px 14px; border: 1px dashed #cbd5e1; border-radius: 6px;">
-                                        <strong style="color: #475569; display: block; margin-bottom: 8px;">Area Jangkauan Kurir Toko:</strong>
-                                        <ol style="margin: 0; padding-left: 24px; line-height: 1.6; column-count: 2; column-gap: 24px; list-style-type: decimal;">
-                                            <li style="break-inside: avoid; margin-bottom: 6px;">Dampit (Jambangan, Ngelak, Rembun)</li>
-                                            <li style="break-inside: avoid; margin-bottom: 6px;">Tirtoyudo (Kepatihan, Pujiharjo, Lenggoksono)</li>
-                                            <li style="break-inside: avoid; margin-bottom: 6px;">Wonoagung (Wonokitri)</li>
-                                            <li style="break-inside: avoid; margin-bottom: 6px;">Tamansari (Blubuk)</li>
-                                            <li style="break-inside: avoid; margin-bottom: 6px;">Kebonagung (Karangsono)</li>
-                                            <li style="break-inside: avoid; margin-bottom: 6px;">Gedangan (Sumber Gesing)</li>
-                                            <li style="break-inside: avoid; margin-bottom: 6px;">Srimulyo (Sumber Arum)</li>
-                                            <li style="break-inside: avoid; margin-bottom: 6px;">Ampelgading (Sono Wangi, Sono Sekar)</li>
-                                            <li style="break-inside: avoid; margin-bottom: 6px;">Sumbermanjing Wetan (Tambak Asri, Sido Asri)</li>
-                                            <li style="break-inside: avoid; margin-bottom: 6px;">Pamotan (Sumber Ayu)</li>
-                                            <li style="break-inside: avoid; margin-bottom: 6px;">Majangtengah (Lambang Kuning)</li>
-                                            <li style="break-inside: avoid; margin-bottom: 6px;">Sumberputih (Lambang Sari)</li>
-                                            <li style="break-inside: avoid; margin-bottom: 6px;">Wajak (Sumber Putih)</li>
-                                            <li style="break-inside: avoid; margin-bottom: 6px;">Turen (Kedok, Turen Pusat)</li>
-                                        </ol>
                                     </div>
                                 </div>
                             </template>
@@ -752,9 +824,7 @@ const handleCheckout = async () => {
                                         <span style="font-size: 14px; font-weight: 600; color: #1e293b;">
                                             {{ method.name }}
                                         </span>
-                                        <span style="font-size: 11px; font-weight: 700; color: white; background: linear-gradient(135deg, #0ea5e9, #6366f1); padding: 2px 8px; border-radius: 4px; margin-left: 8px;">
-                                            {{ method.badge }}
-                                        </span>
+
                                     </div>
                                 </div>
                             </div>
@@ -863,13 +933,12 @@ const handleCheckout = async () => {
                                     type="submit" 
                                     class="btn w-100" 
                                     :style="[
-                                        { background: selectedPaymentMethod.startsWith('midtrans') ? 'linear-gradient(135deg, #0ea5e9, #6366f1)' : '#0f172a', color: 'white', fontSize: '14px', padding: '16px', fontWeight: '700', borderRadius: '6px', border: 'none', cursor: 'pointer', transition: 'all 0.3s ease' },
+                                        { background: '#dc2626', color: 'white', fontSize: '14px', padding: '16px', fontWeight: '700', borderRadius: '6px', border: 'none', cursor: 'pointer', transition: 'all 0.3s ease' },
                                         isCheckoutDisabled ? { opacity: 0.5, cursor: 'not-allowed' } : {}
                                     ]"
                                     :disabled="isCheckoutDisabled"
                                 >
                                     <span v-if="checkoutForm.processing || isProcessingMidtrans">MEMPROSES PESANAN...</span>
-                                    <span v-else-if="selectedPaymentMethod.startsWith('midtrans')">&#x1F512; BAYAR OTOMATIS</span>
                                     <span v-else>BAYAR SEKARANG</span>
                                 </button>
                             </form>
@@ -893,10 +962,10 @@ const handleCheckout = async () => {
                             <div class="d-flex justify-between align-center mb-4" style="font-size: 14px; color: #64748b;">
                                 <span>Ongkos Kirim</span>
                                 <span style="color: #0f172a; font-weight: 500;">
-                                    <template v-if="checkoutForm.courier === 'Kurir Toko Sinar Abadi'">
+                                    <template v-if="checkoutForm.courier.includes('Kurir Toko Sinar Abadi')">
                                         <template v-if="selectedDeliveryLocation">
-                                            <span v-if="selectedDeliveryLocation.shippingCost === 0" style="color: #059669; font-weight: 700;">Gratis</span>
-                                            <span v-else>{{ formatPrice(selectedDeliveryLocation.shippingCost) }}</span>
+                                            <span v-if="currentShippingCost === 0" style="color: #059669; font-weight: 700;">Gratis</span>
+                                            <span v-else>{{ formatPrice(currentShippingCost) }}</span>
                                         </template>
                                         <span v-else style="color: #dc2626; font-style: italic; font-size: 13px;">(tujuan tidak terjangkau)</span>
                                     </template>
